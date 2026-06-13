@@ -1,0 +1,28 @@
+
+python3 -m http.server 8000
+
+http://localhost:8000/builder.html
+
+
+
+cheeses:  red Leicester, white cheddar, stilton, brie, camembert, stilton + cranberry
+
+meats:  salami, pepperoni, prosciutto, cured ham, honey dew
+
+dips:  hummus, guacamole, tzatziki, taramasalata
+
+pasta:  spaghetti, penne, fusilli, bow, 
+
+pickles:  onions, red cabbage, gherkin, beetroot,
+
+cakes:  orange, lemon, date flapjack, apricot flapjack, brownie, 
+        carob cake, bread pudding, fruit scones, cheese scones
+
+pulses:  white rice, red lentils, green lentils 
+
+misc:  cash till, meat slicer, cheese slicer
+
+jams: raspberry, strawberry, apricot, marmalade
+
+sauces: cranberry, mint sauce, horseradish
+
