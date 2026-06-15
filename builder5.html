@@ -13,22 +13,31 @@ html, body { height: 100%; overflow: hidden; font-family: system-ui, -apple-syst
   height: 100vh;
 }
 
+#divider {
+  width: 4px;
+  cursor: col-resize;
+  background: #0f3460;
+  flex-shrink: 0;
+}
+#divider:hover { background: #e94560; }
+
 #viewport {
   flex: 1;
   position: relative;
   cursor: crosshair;
+  min-width: 0;
 }
 #viewport canvas { display: block; width: 100%; height: 100%; }
 
 #sidebar {
-  width: 240px;
+  width: 288px;
   background: #16213e;
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
-  border-left: 1px solid #0f3460;
+  border-left: none;
   flex-shrink: 0;
 }
 
@@ -68,7 +77,8 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #88
 .palette-btn-textured .label { display: none; }
 
 .row { display: flex; gap: 8px; align-items: center; }
-.row label { font-size: 12px; color: #aaa; flex-shrink: 0; }
+.row label { font-size: 12px; color: #aaa; flex-shrink: 0; width: 80px; }
+.row .slider-val { font-size: 11px; color: #ccc; min-width: 32px; text-align: right; }
 
 input[type="color"] {
   width: 32px; height: 32px;
@@ -174,6 +184,7 @@ input[type="range"]::-webkit-slider-thumb {
 <body>
 <div id="app">
   <div id="viewport"></div>
+  <div id="divider"></div>
   <div id="sidebar">
     <h1>BLOCK BUILDER</h1>
 
@@ -204,7 +215,10 @@ input[type="range"]::-webkit-slider-thumb {
 
     <div>
       <h2>Camera</h2>
-      <div class="row"><label>Zoom</label><input type="range" id="zoomSlider" min="2" max="50" step="0.5" value="26" style="flex:1"></div>
+      <div class="row"><label>Zoom</label><input type="range" id="zoomSlider" min="2" max="50" step="0.5" value="26" style="flex:1"><span id="zoomVal" class="slider-val">26</span></div>
+      <div class="row"><label>Rotate</label><input type="range" id="rotSlider" min="0" max="360" step="1" value="0" style="flex:1"><span id="rotVal" class="slider-val">0</span></div>
+      <button class="btn btn-secondary" id="resetCamBtn" style="width:100%;margin-top:4px">Reset View</button>
+      <button class="btn btn-secondary" id="camToggleBtn" style="width:100%;margin-top:4px">Perspective</button>
     </div>
 
     <div class="row">
@@ -222,15 +236,15 @@ input[type="range"]::-webkit-slider-thumb {
     <div>
       <button class="btn btn-secondary" id="lightingToggle" style="width:100%;text-align:left">▸ Lighting</button>
       <div id="lightingSliders" style="display:none">
-      <div class="row"><label>Headlight</label><input type="range" id="headlightSlider" min="0" max="20" step="0.1" value="0" style="flex:1"></div>
-      <div class="row"><label>Sun X</label><input type="range" id="lightX" min="-30" max="30" step="0.5" value="10" style="flex:1"></div>
-      <div class="row"><label>Sun Y</label><input type="range" id="lightY" min="1" max="30" step="0.5" value="15" style="flex:1"></div>
-      <div class="row"><label>Sun Z</label><input type="range" id="lightZ" min="-30" max="30" step="0.5" value="10" style="flex:1"></div>
-      <div class="row"><label>Sun Bright</label><input type="range" id="sunBright" min="0" max="5" step="0.1" value="1.8" style="flex:1"></div>
-      <div class="row"><label>Hang Bright</label><input type="range" id="hangBright" min="0" max="20" step="0.5" value="12" style="flex:1"></div>
-      <div class="row"><label>Hang X</label><input type="range" id="hangX" min="-20" max="20" step="0.5" value="0" style="flex:1"></div>
-      <div class="row"><label>Hang Y</label><input type="range" id="hangY" min="1" max="15" step="0.5" value="8" style="flex:1"></div>
-      <div class="row"><label>Hang Z</label><input type="range" id="hangZ" min="-20" max="20" step="0.5" value="0" style="flex:1"></div>
+      <div class="row"><label>Headlight</label><input type="range" id="headlightSlider" min="0" max="20" step="0.1" value="0" style="flex:1"><span id="headlightSliderVal" class="slider-val">0</span></div>
+      <div class="row"><label>Sun Bright</label><input type="range" id="sunBright" min="0" max="5" step="0.1" value="1.8" style="flex:1"><span id="sunBrightVal" class="slider-val">1.8</span></div>
+      <div class="row"><label>Sun X</label><input type="range" id="lightX" min="-30" max="30" step="0.5" value="0" style="flex:1"><span id="lightXVal" class="slider-val">0</span></div>
+      <div class="row"><label>Sun Y</label><input type="range" id="lightY" min="1" max="30" step="0.5" value="10" style="flex:1"><span id="lightYVal" class="slider-val">10</span></div>
+      <div class="row"><label>Sun Z</label><input type="range" id="lightZ" min="-30" max="30" step="0.5" value="-30" style="flex:1"><span id="lightZVal" class="slider-val">-30</span></div>
+      <div class="row"><label>Hang Bright</label><input type="range" id="hangBright" min="0" max="20" step="0.5" value="12" style="flex:1"><span id="hangBrightVal" class="slider-val">12</span></div>
+      <div class="row"><label>Hang X</label><input type="range" id="hangX" min="-20" max="20" step="0.5" value="0" style="flex:1"><span id="hangXVal" class="slider-val">0</span></div>
+      <div class="row"><label>Hang Y</label><input type="range" id="hangY" min="1" max="15" step="0.5" value="8" style="flex:1"><span id="hangYVal" class="slider-val">8</span></div>
+      <div class="row"><label>Hang Z</label><input type="range" id="hangZ" min="-20" max="20" step="0.5" value="0" style="flex:1"><span id="hangZVal" class="slider-val">0</span></div>
       </div>
     </div>
 
@@ -309,7 +323,7 @@ const BLOCK_SIZE = 1;
 const GRID_MIN = -25;
 const GRID_MAX = 25;
 const HEIGHT_MIN = 0;
-const HEIGHT_MAX = 12;
+const HEIGHT_MAX = 24;
 
 let selectedType = BLOCK_TYPES[0];
 let customColor = selectedType.color;
@@ -317,6 +331,7 @@ let customTexture = null;
 let textureActive = false;
 let nextTexId = 0;
 let blockIdCounter = 0;
+let _importing = false;
 
 let isSelectMode = false;
 let isMuralMode = false;
@@ -336,6 +351,8 @@ const blocks = new Map(); // "x,y,z" -> { mesh, cell, type, color, texture, id }
 const undoStack = [];
 const MAX_UNDO = 50;
 let undoBlocked = false; // prevent recursive undo recording
+
+let isOrtho = false;
 
 let scene, camera, renderer, controls, sunLight, sunMarker, headlight, hangingLight, hangingFixture;
 const clock = new THREE.Clock();
@@ -377,6 +394,7 @@ labelBtn.addEventListener('click', () => {
     notify('Click a block face for the label');
   }
 });
+muralBtn.addEventListener('click', toggleMuralMode);
 const clearSelBtn = document.getElementById('clearSelBtn');
 const zoomSlider = document.getElementById('zoomSlider');
 
@@ -420,8 +438,8 @@ function initScene() {
   const w = viewport.clientWidth;
   const h = viewport.clientHeight;
   camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
-  camera.position.set(13, 12.4, 19.5);
-  camera.lookAt(0, 0, 0);
+  camera.position.set(0, 5, -30);
+  camera.lookAt(0, 5, 0);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(w, h);
@@ -433,17 +451,25 @@ function initScene() {
   viewport.appendChild(renderer.domElement);
 
   controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 1, 0);
+  controls.target.set(0, 5, 0);
   controls.enableDamping = true;
   controls.dampingFactor = 0.1;
   controls.minDistance = 3;
   controls.maxDistance = 40;
-  controls.maxPolarAngle = Math.PI / 2.1;
+  controls.maxPolarAngle = Math.PI;
   controls.addEventListener('change', () => {
     const dist = camera.position.distanceTo(controls.target);
     zoomSlider.value = Math.round((52 - dist) * 10) / 10;
+    zoomVal.textContent = zoomSlider.value;
+    const offset = new THREE.Vector3().copy(camera.position).sub(controls.target);
+    const spherical = new THREE.Spherical().setFromVector3(offset);
+    const deg = THREE.MathUtils.radToDeg(spherical.theta) % 360;
+    const rounded = Math.round((deg + 360) % 360);
+    rotSlider.value = rounded;
+    rotVal.textContent = rounded;
   });
   controls.update();
+  controls.saveState();
 
   // Lights
   const ambient = new THREE.AmbientLight(0x404060, 0.6);
@@ -452,9 +478,9 @@ function initScene() {
   const hemi = new THREE.HemisphereLight(0x88aaff, 0x444422, 0.8);
   scene.add(hemi);
 
-  sunLight = new THREE.DirectionalLight(0xffeedd, 1.8);
-  sunLight.position.set(10, 15, 10);
-  sunLight.castShadow = true;
+   sunLight = new THREE.DirectionalLight(0xffeedd, 1.8);
+   sunLight.position.set(0, 10, -30);
+   sunLight.castShadow = true;
   sunLight.shadow.mapSize.width = 1024;
   sunLight.shadow.mapSize.height = 1024;
   sunLight.shadow.camera.near = 0.5;
@@ -537,33 +563,72 @@ function initScene() {
   const resize = () => {
     const w = viewport.clientWidth;
     const h = viewport.clientHeight;
-    camera.aspect = w / h;
+    if (isOrtho) {
+      const dist = camera.position.distanceTo(controls.target);
+      const frustum = dist * Math.tan(THREE.MathUtils.degToRad(45 / 2));
+      camera.left = -frustum * w / h;
+      camera.right = frustum * w / h;
+      camera.top = frustum;
+      camera.bottom = -frustum;
+    } else {
+      camera.aspect = w / h;
+    }
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
   };
+  window.resizeRenderer = resize;
   window.addEventListener('resize', resize);
 }
+
+// Draggable sidebar divider
+const divider = document.getElementById('divider');
+const sidebar = document.getElementById('sidebar');
+let dragging = false;
+divider.addEventListener('mousedown', (e) => {
+  dragging = true;
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+});
+document.addEventListener('mousemove', (e) => {
+  if (!dragging) return;
+  const w = window.innerWidth - e.clientX - 4;
+  sidebar.style.width = Math.max(160, Math.min(500, w)) + 'px';
+  if (window.resizeRenderer) window.resizeRenderer();
+});
+document.addEventListener('mouseup', () => {
+  dragging = false;
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+});
 
 // Light slider controls
 ['X', 'Y', 'Z'].forEach(axis => {
   const slider = document.getElementById('light' + axis);
+  const valSpan = document.getElementById('light' + axis + 'Val');
   slider.addEventListener('input', () => {
     const v = parseFloat(slider.value);
     sunLight.position[axis.toLowerCase()] = v;
     sunMarker.position.copy(sunLight.position);
+    valSpan.textContent = v;
   });
 });
 
 document.getElementById('headlightSlider').addEventListener('input', () => {
-  headlight.intensity = parseFloat(document.getElementById('headlightSlider').value);
+  const v = parseFloat(document.getElementById('headlightSlider').value);
+  headlight.intensity = v;
+  document.getElementById('headlightSliderVal').textContent = v;
 });
 
 document.getElementById('sunBright').addEventListener('input', () => {
-  sunLight.intensity = parseFloat(document.getElementById('sunBright').value);
+  const v = parseFloat(document.getElementById('sunBright').value);
+  sunLight.intensity = v;
+  document.getElementById('sunBrightVal').textContent = v;
 });
 
 ['hangBright','hangX','hangY','hangZ'].forEach(id => {
-  document.getElementById(id).addEventListener('input', () => {
+  const slider = document.getElementById(id);
+  const valSpan = document.getElementById(id + 'Val');
+  slider.addEventListener('input', () => {
     const bright = parseFloat(document.getElementById('hangBright').value);
     const x = parseFloat(document.getElementById('hangX').value);
     const y = parseFloat(document.getElementById('hangY').value);
@@ -571,6 +636,10 @@ document.getElementById('sunBright').addEventListener('input', () => {
     hangingLight.intensity = bright;
     hangingLight.position.set(x, y, z);
     hangingFixture.position.set(x, y, z);
+    document.getElementById('hangBrightVal').textContent = bright;
+    document.getElementById('hangXVal').textContent = x;
+    document.getElementById('hangYVal').textContent = y;
+    document.getElementById('hangZVal').textContent = z;
   });
 });
 
@@ -611,11 +680,103 @@ document.getElementById('helpToggle').addEventListener('click', () => {
 
 // Zoom slider
 const zoomDir = new THREE.Vector3();
+const zoomVal = document.getElementById('zoomVal');
 zoomSlider.addEventListener('input', () => {
-  const dist = 52 - parseFloat(zoomSlider.value);
-  zoomDir.subVectors(camera.position, controls.target).normalize();
-  camera.position.copy(controls.target).add(zoomDir.multiplyScalar(dist));
+  const v = parseFloat(zoomSlider.value);
+  zoomVal.textContent = v;
+  if (isOrtho) {
+    camera.zoom = v / 10;
+    camera.updateProjectionMatrix();
+  } else {
+    const dist = 52 - v;
+    zoomDir.subVectors(camera.position, controls.target).normalize();
+    camera.position.copy(controls.target).add(zoomDir.multiplyScalar(dist));
+  }
   controls.update();
+});
+
+// Rotation slider
+const rotSlider = document.getElementById('rotSlider');
+const rotVal = document.getElementById('rotVal');
+rotSlider.addEventListener('input', () => {
+  const deg = parseFloat(rotSlider.value);
+  rotVal.textContent = deg;
+  const rad = THREE.MathUtils.degToRad(deg);
+  const offset = new THREE.Vector3().copy(camera.position).sub(controls.target);
+  const dist = offset.length();
+  const spherical = new THREE.Spherical().setFromVector3(offset);
+  spherical.theta = rad;
+  offset.setFromSpherical(spherical);
+  camera.position.copy(controls.target).add(offset);
+  controls.update();
+});
+
+document.getElementById('resetCamBtn').addEventListener('click', () => {
+  if (isOrtho) {
+    camera.position.set(0, 5, -30);
+    controls.target.set(0, 5, 0);
+    camera.zoom = 2.6;
+    camera.updateProjectionMatrix();
+    zoomSlider.value = 26;
+    controls.update();
+  } else {
+    controls.reset();
+    zoomSlider.value = 26;
+  }
+});
+
+document.getElementById('camToggleBtn').addEventListener('click', () => {
+  isOrtho = !isOrtho;
+  const pos = camera.position.clone();
+  const target = controls.target.clone();
+  const quat = camera.quaternion.clone();
+  const w = viewport.clientWidth;
+  const h = viewport.clientHeight;
+
+  controls.dispose();
+
+  if (isOrtho) {
+    const dist = pos.distanceTo(target);
+    const frustum = dist * Math.tan(THREE.MathUtils.degToRad(45 / 2));
+    camera = new THREE.OrthographicCamera(
+      -frustum * w / h, frustum * w / h,
+      frustum, -frustum,
+      0.1, 100
+    );
+    camera.zoom = 2.6;
+  } else {
+    camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
+  }
+  camera.position.copy(pos);
+  camera.quaternion.copy(quat);
+  camera.updateProjectionMatrix();
+
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.copy(target);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.1;
+  controls.minDistance = 3;
+  controls.maxDistance = 40;
+  controls.maxPolarAngle = Math.PI;
+  controls.addEventListener('change', () => {
+    if (isOrtho) {
+      zoomSlider.value = Math.round(camera.zoom * 10);
+    } else {
+      const dist = camera.position.distanceTo(controls.target);
+      zoomSlider.value = Math.round((52 - dist) * 10) / 10;
+    }
+    zoomVal.textContent = zoomSlider.value;
+    const offset = new THREE.Vector3().copy(camera.position).sub(controls.target);
+    const spherical = new THREE.Spherical().setFromVector3(offset);
+    const deg = THREE.MathUtils.radToDeg(spherical.theta) % 360;
+    const rounded = Math.round((deg + 360) % 360);
+    rotSlider.value = rounded;
+    rotVal.textContent = rounded;
+  });
+  controls.update();
+  controls.saveState();
+
+  document.getElementById('camToggleBtn').textContent = isOrtho ? 'Perspective' : 'Orthographic';
 });
 
 // ======== BLOCK MATERIAL ========
@@ -680,7 +841,7 @@ function createBlock(cell, type, color, texture) {
     undoStack.push({ type: 'place', cell: { ...cell }, data });
     if (undoStack.length > MAX_UNDO) undoStack.shift();
   }
-  saveToStorage();
+  if (!_importing) saveToStorage();
   return data;
 }
 
@@ -725,7 +886,7 @@ function clearAll() {
     l.sprite.material.dispose();
   }
   labels.length = 0;
-  saveToStorage();
+  if (!_importing) saveToStorage();
 }
 
 // Stats removed — use Chrome devtools if needed
@@ -1071,6 +1232,28 @@ function buildPasteGhost() {
   pasteGhostGroup = group;
 }
 
+function toggleMuralMode() {
+  if (isMuralMode) {
+    isMuralMode = false;
+    muralCorner1 = null;
+    clearMuralPreview();
+    muralBtn.textContent = 'Mural';
+    muralBtn.className = 'btn btn-secondary';
+  } else {
+    if (isLabelMode) {
+      isLabelMode = false;
+      labelCorner1 = null;
+      labelBtn.textContent = 'Label';
+      labelBtn.className = 'btn btn-secondary';
+    }
+    isMuralMode = true;
+    muralCorner1 = null;
+    muralBtn.textContent = 'Mural: ON';
+    muralBtn.className = 'btn btn-primary';
+    notify('Click a block face for the mural corner');
+  }
+}
+
 function updateGhost(clientX, clientY) {
   if (pasteGhostGroup) {
     if (ghostMesh) ghostMesh.visible = false;
@@ -1284,6 +1467,7 @@ function createMural(cell2) {
   clearMuralPreview();
   muralCorner1 = null;
   isMuralMode = false;
+  saveToStorage();
   muralBtn.textContent = 'Mural';
   muralBtn.className = 'btn btn-secondary';
 }
@@ -1361,6 +1545,7 @@ function createLabel(cell2) {
   labelCorner1 = null;
   isLabelMode = false;
   labelBtn.textContent = 'Label';
+  saveToStorage();
   labelBtn.className = 'btn btn-secondary';
   notify('Label created');
 }
@@ -1566,15 +1751,15 @@ function setupEvents() {
         const entry = dirImages.find(di => di.texture.image.src === data.texture.image.src);
         if (entry) {
           texTooltip.textContent = entry.name;
-          texTooltip.style.left = (e.clientX + 12) + 'px';
-          texTooltip.style.top = (e.clientY + 12) + 'px';
-          texTooltip.style.display = '';
         } else {
-          texTooltip.style.display = 'none';
+          texTooltip.textContent = data.type.label || 'Custom texture';
         }
       } else {
-        texTooltip.style.display = 'none';
+        texTooltip.textContent = data.type.label;
       }
+      texTooltip.style.left = (e.clientX + 12) + 'px';
+      texTooltip.style.top = (e.clientY + 12) + 'px';
+      texTooltip.style.display = '';
     } else {
       texTooltip.style.display = 'none';
     }
@@ -1924,17 +2109,21 @@ function exportJSON() {
 }
 
 function saveToStorage() {
-  try { localStorage.setItem('builder_scene', exportJSON()); } catch (e) {}
+  try {
+    const json = exportJSON();
+    localStorage.setItem('builder_scene', json);
+  } catch (e) { console.error('saveToStorage failed', e); }
 }
 
 function loadFromStorage() {
   try {
     const json = localStorage.getItem('builder_scene');
     if (json) importJSON(json);
-  } catch (e) {}
+  } catch (e) { console.error('loadFromStorage failed', e); }
 }
 
 function importJSON(json) {
+  _importing = true;
   try {
     const data = JSON.parse(json);
     if (!data.blocks || !Array.isArray(data.blocks)) throw new Error('Invalid format');
@@ -2004,6 +2193,8 @@ function importJSON(json) {
   } catch (err) {
     alert('Import failed: ' + err.message);
   }
+  // Save after all timeouts complete
+  setTimeout(() => { _importing = false; saveToStorage(); }, 300);
 }
 
 exportBtn.addEventListener('click', async () => {
@@ -2155,25 +2346,17 @@ document.addEventListener('keydown', (e) => {
   }
   if (key === 'e') { exportBtn.click(); return; }
 
-  const panStep = 1.0;
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
     e.preventDefault();
-    const forward = new THREE.Vector3();
-    camera.getWorldDirection(forward);
-    forward.y = 0;
-    forward.normalize();
-
-    const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
-    const move = new THREE.Vector3();
-
-    if (e.key === 'ArrowUp') move.copy(forward).multiplyScalar(panStep);
-    if (e.key === 'ArrowDown') move.copy(forward).multiplyScalar(-panStep);
-    if (e.key === 'ArrowRight') move.copy(right).multiplyScalar(panStep);
-    if (e.key === 'ArrowLeft') move.copy(right).multiplyScalar(-panStep);
-
-    camera.position.add(move);
-    controls.target.add(move);
-    controls.update();
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      const step = e.key === 'ArrowUp' ? 1 : -1;
+      zoomSlider.value = Math.max(2, Math.min(50, parseFloat(zoomSlider.value) + step));
+      zoomSlider.dispatchEvent(new Event('input'));
+    } else {
+      const step = e.key === 'ArrowRight' ? -1 : 1;
+      rotSlider.value = (parseFloat(rotSlider.value) + step + 360) % 360;
+      rotSlider.dispatchEvent(new Event('input'));
+    }
     return;
   }
 
