@@ -1,0 +1,2373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Block Builder</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; font-family: system-ui, -apple-system, sans-serif; background: #1a1a2e; color: #eee; }
+
+#app {
+  display: flex;
+  height: 100vh;
+}
+
+#divider {
+  width: 4px;
+  cursor: col-resize;
+  background: #0f3460;
+  flex-shrink: 0;
+}
+#divider:hover { background: #e94560; }
+
+#viewport {
+  flex: 1;
+  position: relative;
+  cursor: crosshair;
+  min-width: 0;
+}
+#viewport canvas { display: block; width: 100%; height: 100%; }
+
+#sidebar {
+  width: 288px;
+  background: #16213e;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  border-left: none;
+  flex-shrink: 0;
+}
+
+h1 { font-size: 16px; font-weight: 600; color: #e94560; letter-spacing: 1px; }
+h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 4px; }
+
+.palette {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+.palette-btn {
+  aspect-ratio: 1;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.15s;
+}
+.palette-btn:hover { border-color: #555; }
+.palette-btn.active { border-color: #e94560; }
+.palette-btn .label {
+  position: absolute;
+  bottom: 2px;
+  left: 0; right: 0;
+  text-align: center;
+  font-size: 8px;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  pointer-events: none;
+}
+.palette-btn .tex-thumb {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.palette-btn-textured .label { display: none; }
+
+.row { display: flex; gap: 8px; align-items: center; }
+.row label { font-size: 12px; color: #aaa; flex-shrink: 0; width: 80px; }
+.row .slider-val { font-size: 11px; color: #ccc; min-width: 32px; text-align: right; }
+
+input[type="color"] {
+  width: 32px; height: 32px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+  background: none;
+  padding: 0;
+}
+
+.btn {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s;
+  flex: 1;
+  text-align: center;
+}
+.btn-primary { background: #e94560; color: #fff; }
+.btn-primary:hover { background: #d63851; }
+.btn-secondary { background: #0f3460; color: #eee; }
+.btn-secondary:hover { background: #1a4a7a; }
+.btn-danger { background: #533; color: #e88; }
+.btn-danger:hover { background: #644; }
+
+.btn-icon {
+  width: 32px; height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex: none;
+}
+
+.stats {
+  font-size: 12px;
+  color: #888;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #0f3460;
+  height: 4px;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e94560;
+  cursor: pointer;
+}
+
+.help {
+  font-size: 11px;
+  color: #666;
+  line-height: 1.6;
+}
+
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow: auto;
+}
+.modal h3 { margin-bottom: 12px; color: #e94560; }
+.modal pre {
+  font-size: 11px;
+  color: #aaa;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 40vh;
+  overflow: auto;
+  background: #0d1b2a;
+  padding: 12px;
+  border-radius: 6px;
+}
+.modal .row { margin-top: 12px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="viewport"></div>
+  <div id="divider"></div>
+  <div id="sidebar">
+    <h1>BLOCK BUILDER</h1>
+
+    <div>
+      <button class="btn btn-secondary" id="texturesToggle" style="width:100%;text-align:left">▸ Textures</button>
+      <div id="texturesPalette" style="display:none">
+        <div class="palette" id="palette"></div>
+      </div>
+    </div>
+    <div id="dirPaletteSection" style="display:none">
+      <button class="btn btn-secondary" id="imagesToggle" style="width:100%;text-align:left">▸ Images</button>
+      <div id="imagesPalette" style="display:none">
+        <div class="palette" id="dirPalette"></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <label>Color</label>
+      <input type="color" id="colorPicker" value="#d4c5a9">
+    </div>
+
+    <div class="row">
+      <label>Texture</label>
+      <button class="btn btn-secondary" id="texBtn">Reload Images</button>
+      <button class="btn btn-danger btn-icon" id="texClearBtn" style="display:none">&times;</button>
+      <input type="file" id="dirInput" webkitdirectory accept="image/*" style="display:none">
+    </div>
+
+    <div>
+      <h2>Camera</h2>
+      <div class="row"><label>Zoom</label><input type="range" id="zoomSlider" min="2" max="50" step="0.5" value="26" style="flex:1"><span id="zoomVal" class="slider-val">26</span></div>
+      <div class="row"><label>Rotate</label><input type="range" id="rotSlider" min="0" max="360" step="1" value="0" style="flex:1"><span id="rotVal" class="slider-val">0</span></div>
+      <button class="btn btn-secondary" id="resetCamBtn" style="width:100%;margin-top:4px">Reset View</button>
+      <button class="btn btn-secondary" id="camToggleBtn" style="width:100%;margin-top:4px">Perspective</button>
+    </div>
+
+    <div class="row">
+      <button class="btn btn-secondary" id="exportBtn">Export JSON</button>
+      <button class="btn btn-secondary" id="importBtn">Import JSON</button>
+      <input type="file" id="importInput" accept=".json" style="display:none">
+    </div>
+
+    <div class="row">
+      <button class="btn btn-secondary" id="muralBtn">Mural</button>
+      <button class="btn btn-secondary" id="labelBtn">Label</button>
+      <button class="btn btn-danger" id="clearSelBtn">Clear Sel</button>
+    </div>
+
+    <div>
+      <button class="btn btn-secondary" id="lightingToggle" style="width:100%;text-align:left">▸ Lighting</button>
+      <div id="lightingSliders" style="display:none">
+      <div class="row"><label>Headlight</label><input type="range" id="headlightSlider" min="0" max="20" step="0.1" value="0" style="flex:1"><span id="headlightSliderVal" class="slider-val">0</span></div>
+      <div class="row"><label>Sun Bright</label><input type="range" id="sunBright" min="0" max="5" step="0.1" value="1.8" style="flex:1"><span id="sunBrightVal" class="slider-val">1.8</span></div>
+      <div class="row"><label>Sun X</label><input type="range" id="lightX" min="-30" max="30" step="0.5" value="0" style="flex:1"><span id="lightXVal" class="slider-val">0</span></div>
+      <div class="row"><label>Sun Y</label><input type="range" id="lightY" min="1" max="30" step="0.5" value="10" style="flex:1"><span id="lightYVal" class="slider-val">10</span></div>
+      <div class="row"><label>Sun Z</label><input type="range" id="lightZ" min="-30" max="30" step="0.5" value="-30" style="flex:1"><span id="lightZVal" class="slider-val">-30</span></div>
+      <div class="row"><label>Hang Bright</label><input type="range" id="hangBright" min="0" max="20" step="0.5" value="12" style="flex:1"><span id="hangBrightVal" class="slider-val">12</span></div>
+      <div class="row"><label>Hang X</label><input type="range" id="hangX" min="-20" max="20" step="0.5" value="0" style="flex:1"><span id="hangXVal" class="slider-val">0</span></div>
+      <div class="row"><label>Hang Y</label><input type="range" id="hangY" min="1" max="15" step="0.5" value="8" style="flex:1"><span id="hangYVal" class="slider-val">8</span></div>
+      <div class="row"><label>Hang Z</label><input type="range" id="hangZ" min="-20" max="20" step="0.5" value="0" style="flex:1"><span id="hangZVal" class="slider-val">0</span></div>
+      </div>
+    </div>
+
+    <div>
+      <button class="btn btn-secondary" id="helpToggle" style="width:100%;text-align:left">▸ Help</button>
+      <div class="help" id="help" style="display:none">
+        <b>Ctrl+LMB</b> — select block<br>
+        <b>Ctrl+C</b> — copy + show ghost<br>
+        <b>LMB / Ctrl+V</b> — paste ghost<br>
+        <b>Esc</b> — cancel ghost<br>
+        <b>Shift+LMB</b> — repaint block<br>
+        <b>RMB</b> — remove block<br>
+        <b>Drag</b> — orbit | <b>Scroll</b> — zoom
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+function generateBrickTexture() {
+  const w = 256, h = 256;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+
+  const bw = 48, bh = 24, mg = 3;
+  const baseR = 179, baseG = 93, baseB = 58;
+
+  ctx.fillStyle = '#c8b89a';
+  ctx.fillRect(0, 0, w, h);
+
+  for (let row = 0; row < 10; row++) {
+    const offset = (row % 2) * (bw / 2);
+    for (let col = 0; col < 6; col++) {
+      const x = col * (bw + mg) + offset + mg / 2;
+      const y = row * (bh + mg) + mg / 2;
+      const sh = 0.82 + Math.random() * 0.18;
+      ctx.fillStyle = `rgb(${baseR*sh|0},${baseG*sh|0},${baseB*sh|0})`;
+      ctx.fillRect(x, y, bw, bh);
+    }
+  }
+
+  const dataUrl = c.toDataURL();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(1, 1);
+  tex.anisotropy = 4;
+  return { tex, dataUrl };
+}
+
+const BRICK = generateBrickTexture();
+
+const BLOCK_TYPES = [
+ { id: 'wall',    label: 'Wall',    color: '#d4c5a9', roughness: 0.9, metalness: 0 },
+ { id: 'floor',   label: 'Floor',   color: '#b8860b', roughness: 0.8, metalness: 0 },
+ { id: 'ceil',    label: 'Ceiling', color: '#f0f0f0', roughness: 0.7, metalness: 0 },
+ { id: 'brick',   label: 'Brick',   color: '#b35d3a', roughness: 0.9, metalness: 0, tex: BRICK.tex, texUrl: BRICK.dataUrl },
+ { id: 'glass',   label: 'Glass',   color: '#88ccee', roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.35 },
+ { id: 'counter', label: 'Counter', color: '#5a3a2a', roughness: 0.6, metalness: 0.1 },
+ { id: 'shelf',   label: 'Shelf',   color: '#8b4513', roughness: 0.8, metalness: 0 },
+];
+
+const BLOCK_SIZE = 1;
+const GRID_MIN = -25;
+const GRID_MAX = 25;
+const HEIGHT_MIN = 0;
+const HEIGHT_MAX = 24;
+
+let selectedType = BLOCK_TYPES[0];
+let customColor = selectedType.color;
+let customTexture = null;
+let textureActive = false;
+let nextTexId = 0;
+let blockIdCounter = 0;
+let _importing = false;
+
+let isSelectMode = false;
+let isMuralMode = false;
+let muralCorner1 = null; // { cell, normal, blockData }
+let muralPreview = null; // THREE.Mesh preview
+let isLabelMode = false;
+let labelCorner1 = null; // { cell, normal, blockData }
+const selection = new Map(); // cellKey -> BoxHelper
+const clipBuffer = []; // { cell, type, color, texture }
+let pasteGhostGroup = null; // THREE.Group of ghost boxes
+let pasteGhostCell = null; // {x,y,z} where ghost is positioned
+const murals = []; // { mesh, cell1, cell2, normal, texture }
+const labels = []; // { sprite, cell, text }
+const dirImages = []; // { name, texture } loaded from images directory
+
+const blocks = new Map(); // "x,y,z" -> { mesh, cell, type, color, texture, id }
+const undoStack = [];
+const MAX_UNDO = 50;
+let undoBlocked = false; // prevent recursive undo recording
+
+let isOrtho = false;
+
+let scene, camera, renderer, controls, sunLight, sunMarker, headlight, hangingLight, hangingFixture;
+const clock = new THREE.Clock();
+
+// Ghost preview
+let ghostMesh = null;
+
+// Ground plane mesh (for raycaster)
+let groundMesh = null;
+
+// Raycaster
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+
+// DOM refs
+const viewport = document.getElementById('viewport');
+const paletteEl = document.getElementById('palette');
+const colorPicker = document.getElementById('colorPicker');
+const texBtn = document.getElementById('texBtn');
+const texClearBtn = document.getElementById('texClearBtn');
+const dirInput = document.getElementById('dirInput');
+const exportBtn = document.getElementById('exportBtn');
+const importBtn = document.getElementById('importBtn');
+const importInput = document.getElementById('importInput');
+const muralBtn = document.getElementById('muralBtn');
+const labelBtn = document.getElementById('labelBtn');
+labelBtn.addEventListener('click', () => {
+  if (isLabelMode) {
+    isLabelMode = false;
+    labelCorner1 = null;
+    labelBtn.textContent = 'Label';
+    labelBtn.className = 'btn btn-secondary';
+  } else {
+    if (isMuralMode) toggleMuralMode();
+    isLabelMode = true;
+    labelCorner1 = null;
+    labelBtn.textContent = 'Label: ON';
+    labelBtn.className = 'btn btn-primary';
+    notify('Click a block face for the label');
+  }
+});
+muralBtn.addEventListener('click', toggleMuralMode);
+const clearSelBtn = document.getElementById('clearSelBtn');
+const zoomSlider = document.getElementById('zoomSlider');
+
+// ======== INDEXEDDB HELPERS ========
+
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('BlockBuilder', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('store');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbGet(key) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('store', 'readonly');
+    const req = tx.objectStore('store').get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbSet(key, val) {
+  const db = await idbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('store', 'readwrite');
+    const req = tx.objectStore('store').put(val, key);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ======== THREE SETUP ========
+
+function initScene() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x2a2a4a);
+
+  const w = viewport.clientWidth;
+  const h = viewport.clientHeight;
+  camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
+  camera.position.set(0, 5, -30);
+  camera.lookAt(0, 5, 0);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  viewport.appendChild(renderer.domElement);
+
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 5, 0);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.1;
+  controls.minDistance = 3;
+  controls.maxDistance = 40;
+  controls.maxPolarAngle = Math.PI;
+  controls.addEventListener('change', () => {
+    const dist = camera.position.distanceTo(controls.target);
+    zoomSlider.value = Math.round((52 - dist) * 10) / 10;
+    zoomVal.textContent = zoomSlider.value;
+    const offset = new THREE.Vector3().copy(camera.position).sub(controls.target);
+    const spherical = new THREE.Spherical().setFromVector3(offset);
+    const deg = THREE.MathUtils.radToDeg(spherical.theta) % 360;
+    const rounded = Math.round((deg + 360) % 360);
+    rotSlider.value = rounded;
+    rotVal.textContent = rounded;
+  });
+  controls.update();
+  controls.saveState();
+
+  // Lights
+  const ambient = new THREE.AmbientLight(0x404060, 0.6);
+  scene.add(ambient);
+
+  const hemi = new THREE.HemisphereLight(0x88aaff, 0x444422, 0.8);
+  scene.add(hemi);
+
+   sunLight = new THREE.DirectionalLight(0xffeedd, 1.8);
+   sunLight.position.set(0, 10, -30);
+   sunLight.castShadow = true;
+  sunLight.shadow.mapSize.width = 1024;
+  sunLight.shadow.mapSize.height = 1024;
+  sunLight.shadow.camera.near = 0.5;
+  sunLight.shadow.camera.far = 40;
+  sunLight.shadow.camera.left = -15;
+  sunLight.shadow.camera.right = 15;
+  sunLight.shadow.camera.top = 15;
+  sunLight.shadow.camera.bottom = -15;
+  scene.add(sunLight);
+
+  headlight = new THREE.SpotLight(0xffffff, 0, 40, Math.PI / 6, 0.5, 1.5);
+  headlight.target.position.set(0, 0, 0);
+  headlight.angle = 0.4;
+  headlight.penumbra = 0.3;
+  headlight.decay = 1;
+  headlight.castShadow = true;
+  headlight.shadow.mapSize.width = 512;
+  headlight.shadow.mapSize.height = 512;
+  scene.add(headlight);
+  scene.add(headlight.target);
+
+  hangingLight = new THREE.PointLight(0xffeedd, 12, 25, 1.2);
+  hangingLight.position.set(0, 8, 0);
+  hangingLight.castShadow = true;
+  hangingLight.shadow.mapSize.width = 256;
+  hangingLight.shadow.mapSize.height = 256;
+  scene.add(hangingLight);
+
+  const fixture = new THREE.Group();
+  const shadeGeo = new THREE.CylinderGeometry(1.2, 1.5, 0.6, 16);
+  const shadeMat = new THREE.MeshStandardMaterial({ color: 0x444466, metalness: 0.3, roughness: 0.5 });
+  const shade = new THREE.Mesh(shadeGeo, shadeMat);
+  shade.position.y = -0.3;
+  fixture.add(shade);
+  const bulbGeo = new THREE.SphereGeometry(0.25, 8, 8);
+  const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffffee });
+  const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+  bulb.position.y = -0.1;
+  fixture.add(bulb);
+  const cordGeo = new THREE.CylinderGeometry(0.04, 0.04, 1, 4);
+  const cordMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
+  const cord = new THREE.Mesh(cordGeo, cordMat);
+  cord.position.y = 0.5;
+  fixture.add(cord);
+  fixture.position.copy(hangingLight.position);
+  scene.add(fixture);
+  hangingFixture = fixture;
+
+  const markerGeo = new THREE.SphereGeometry(0.15, 8, 8);
+  const markerMat = new THREE.MeshBasicMaterial({ color: 0xffdd44 });
+  sunMarker = new THREE.Mesh(markerGeo, markerMat);
+  sunMarker.position.copy(sunLight.position);
+  scene.add(sunMarker);
+
+  // Ground
+  const groundGeo = new THREE.PlaneGeometry(60, 60);
+  const groundMat = new THREE.MeshStandardMaterial({
+    color: 0x333355,
+    roughness: 1,
+    metalness: 0,
+    transparent: true,
+    opacity: 0.6,
+    side: THREE.DoubleSide,
+  });
+  groundMesh = new THREE.Mesh(groundGeo, groundMat);
+  groundMesh.rotation.x = -Math.PI / 2;
+  groundMesh.position.y = -0.01;
+  groundMesh.receiveShadow = true;
+  scene.add(groundMesh);
+
+  // Grid
+  const grid = new THREE.GridHelper(50, 50, 0x6666aa, 0x444466);
+  grid.position.y = 0;
+  scene.add(grid);
+
+  // Axis helper (subtle)
+  // scene.add(new THREE.AxesHelper(1));
+
+  // Resize
+  const resize = () => {
+    const w = viewport.clientWidth;
+    const h = viewport.clientHeight;
+    if (isOrtho) {
+      const dist = camera.position.distanceTo(controls.target);
+      const frustum = dist * Math.tan(THREE.MathUtils.degToRad(45 / 2));
+      camera.left = -frustum * w / h;
+      camera.right = frustum * w / h;
+      camera.top = frustum;
+      camera.bottom = -frustum;
+    } else {
+      camera.aspect = w / h;
+    }
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  };
+  window.resizeRenderer = resize;
+  window.addEventListener('resize', resize);
+}
+
+// Draggable sidebar divider
+const divider = document.getElementById('divider');
+const sidebar = document.getElementById('sidebar');
+let dragging = false;
+divider.addEventListener('mousedown', (e) => {
+  dragging = true;
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+});
+document.addEventListener('mousemove', (e) => {
+  if (!dragging) return;
+  const w = window.innerWidth - e.clientX - 4;
+  sidebar.style.width = Math.max(160, Math.min(500, w)) + 'px';
+  if (window.resizeRenderer) window.resizeRenderer();
+});
+document.addEventListener('mouseup', () => {
+  dragging = false;
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+});
+
+// Light slider controls
+['X', 'Y', 'Z'].forEach(axis => {
+  const slider = document.getElementById('light' + axis);
+  const valSpan = document.getElementById('light' + axis + 'Val');
+  slider.addEventListener('input', () => {
+    const v = parseFloat(slider.value);
+    sunLight.position[axis.toLowerCase()] = v;
+    sunMarker.position.copy(sunLight.position);
+    valSpan.textContent = v;
+  });
+});
+
+document.getElementById('headlightSlider').addEventListener('input', () => {
+  const v = parseFloat(document.getElementById('headlightSlider').value);
+  headlight.intensity = v;
+  document.getElementById('headlightSliderVal').textContent = v;
+});
+
+document.getElementById('sunBright').addEventListener('input', () => {
+  const v = parseFloat(document.getElementById('sunBright').value);
+  sunLight.intensity = v;
+  document.getElementById('sunBrightVal').textContent = v;
+});
+
+['hangBright','hangX','hangY','hangZ'].forEach(id => {
+  const slider = document.getElementById(id);
+  const valSpan = document.getElementById(id + 'Val');
+  slider.addEventListener('input', () => {
+    const bright = parseFloat(document.getElementById('hangBright').value);
+    const x = parseFloat(document.getElementById('hangX').value);
+    const y = parseFloat(document.getElementById('hangY').value);
+    const z = parseFloat(document.getElementById('hangZ').value);
+    hangingLight.intensity = bright;
+    hangingLight.position.set(x, y, z);
+    hangingFixture.position.set(x, y, z);
+    document.getElementById('hangBrightVal').textContent = bright;
+    document.getElementById('hangXVal').textContent = x;
+    document.getElementById('hangYVal').textContent = y;
+    document.getElementById('hangZVal').textContent = z;
+  });
+});
+
+// Lighting toggle
+document.getElementById('lightingToggle').addEventListener('click', () => {
+  const container = document.getElementById('lightingSliders');
+  const toggle = document.getElementById('lightingToggle');
+  const hidden = container.style.display === 'none';
+  container.style.display = hidden ? '' : 'none';
+  toggle.textContent = hidden ? '▾ Lighting' : '▸ Lighting';
+});
+
+// Textures toggle
+document.getElementById('texturesToggle').addEventListener('click', () => {
+  const container = document.getElementById('texturesPalette');
+  const toggle = document.getElementById('texturesToggle');
+  const hidden = container.style.display === 'none';
+  container.style.display = hidden ? '' : 'none';
+  toggle.textContent = hidden ? '▾ Textures' : '▸ Textures';
+});
+
+// Images toggle
+document.getElementById('imagesToggle')?.addEventListener('click', () => {
+  const container = document.getElementById('imagesPalette');
+  const toggle = document.getElementById('imagesToggle');
+  const hidden = container.style.display === 'none';
+  container.style.display = hidden ? '' : 'none';
+  toggle.textContent = hidden ? '▾ Images' : '▸ Images';
+});
+
+document.getElementById('helpToggle').addEventListener('click', () => {
+  const container = document.getElementById('help');
+  const toggle = document.getElementById('helpToggle');
+  const hidden = container.style.display === 'none';
+  container.style.display = hidden ? '' : 'none';
+  toggle.textContent = hidden ? '▾ Help' : '▸ Help';
+});
+
+// Zoom slider
+const zoomDir = new THREE.Vector3();
+const zoomVal = document.getElementById('zoomVal');
+zoomSlider.addEventListener('input', () => {
+  const v = parseFloat(zoomSlider.value);
+  zoomVal.textContent = v;
+  if (isOrtho) {
+    camera.zoom = v / 10;
+    camera.updateProjectionMatrix();
+  } else {
+    const dist = 52 - v;
+    zoomDir.subVectors(camera.position, controls.target).normalize();
+    camera.position.copy(controls.target).add(zoomDir.multiplyScalar(dist));
+  }
+  controls.update();
+});
+
+// Rotation slider
+const rotSlider = document.getElementById('rotSlider');
+const rotVal = document.getElementById('rotVal');
+rotSlider.addEventListener('input', () => {
+  const deg = parseFloat(rotSlider.value);
+  rotVal.textContent = deg;
+  const rad = THREE.MathUtils.degToRad(deg);
+  const offset = new THREE.Vector3().copy(camera.position).sub(controls.target);
+  const dist = offset.length();
+  const spherical = new THREE.Spherical().setFromVector3(offset);
+  spherical.theta = rad;
+  offset.setFromSpherical(spherical);
+  camera.position.copy(controls.target).add(offset);
+  controls.update();
+});
+
+document.getElementById('resetCamBtn').addEventListener('click', () => {
+  if (isOrtho) {
+    camera.position.set(0, 5, -30);
+    controls.target.set(0, 5, 0);
+    camera.zoom = 2.6;
+    camera.updateProjectionMatrix();
+    zoomSlider.value = 26;
+    controls.update();
+  } else {
+    controls.reset();
+    zoomSlider.value = 26;
+  }
+});
+
+document.getElementById('camToggleBtn').addEventListener('click', () => {
+  isOrtho = !isOrtho;
+  const pos = camera.position.clone();
+  const target = controls.target.clone();
+  const quat = camera.quaternion.clone();
+  const w = viewport.clientWidth;
+  const h = viewport.clientHeight;
+
+  controls.dispose();
+
+  if (isOrtho) {
+    const dist = pos.distanceTo(target);
+    const frustum = dist * Math.tan(THREE.MathUtils.degToRad(45 / 2));
+    camera = new THREE.OrthographicCamera(
+      -frustum * w / h, frustum * w / h,
+      frustum, -frustum,
+      0.1, 100
+    );
+    camera.zoom = 2.6;
+  } else {
+    camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100);
+  }
+  camera.position.copy(pos);
+  camera.quaternion.copy(quat);
+  camera.updateProjectionMatrix();
+
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.copy(target);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.1;
+  controls.minDistance = 3;
+  controls.maxDistance = 40;
+  controls.maxPolarAngle = Math.PI;
+  controls.addEventListener('change', () => {
+    if (isOrtho) {
+      zoomSlider.value = Math.round(camera.zoom * 10);
+    } else {
+      const dist = camera.position.distanceTo(controls.target);
+      zoomSlider.value = Math.round((52 - dist) * 10) / 10;
+    }
+    zoomVal.textContent = zoomSlider.value;
+    const offset = new THREE.Vector3().copy(camera.position).sub(controls.target);
+    const spherical = new THREE.Spherical().setFromVector3(offset);
+    const deg = THREE.MathUtils.radToDeg(spherical.theta) % 360;
+    const rounded = Math.round((deg + 360) % 360);
+    rotSlider.value = rounded;
+    rotVal.textContent = rounded;
+  });
+  controls.update();
+  controls.saveState();
+
+  document.getElementById('camToggleBtn').textContent = isOrtho ? 'Perspective' : 'Orthographic';
+});
+
+// ======== BLOCK MATERIAL ========
+
+function makeMaterial(type, color, texture) {
+  const def = BLOCK_TYPES.find(t => t.id === type.id) || type;
+
+  const matOpts = {
+    color: texture ? '#ffffff' : (color || def.color),
+    roughness: def.roughness ?? 0.7,
+    metalness: def.metalness ?? 0,
+    transparent: def.transparent || false,
+    opacity: def.opacity ?? 1,
+    side: def.transparent ? THREE.DoubleSide : THREE.FrontSide,
+  };
+
+  if (texture) {
+    matOpts.map = texture;
+  } else if (def.tex) {
+    matOpts.map = def.tex;
+  }
+
+  return new THREE.MeshStandardMaterial(matOpts);
+}
+
+// ======== BLOCK CRUD ========
+
+function cellKey(c) { return `${c.x},${c.y},${c.z}`; }
+
+function isOccupied(c) {
+  return blocks.has(cellKey(c));
+}
+
+function createBlock(cell, type, color, texture) {
+  const key = cellKey(cell);
+  if (isOccupied(cell)) return null;
+
+  const blockType = texture
+  ? {
+      id: 'image',
+      label: 'Image',
+      color: '#ffffff',
+      roughness: 0.7,
+      metalness: 0
+    }
+  : type;
+
+  const mat = makeMaterial(blockType, color, texture);
+  const geo = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(cell.x + 0.5, cell.y + 0.5, cell.z + 0.5);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+
+  const id = blockIdCounter++;
+  const data = { mesh, cell: { ...cell }, type, color, texture, id };
+  mesh.userData.blockData = data;
+  blocks.set(key, data);
+  scene.add(mesh);
+
+  if (!undoBlocked) {
+    undoStack.push({ type: 'place', cell: { ...cell }, data });
+    if (undoStack.length > MAX_UNDO) undoStack.shift();
+  }
+  if (!_importing) saveToStorage();
+  return data;
+}
+
+function removeBlock(cell) {
+  const key = cellKey(cell);
+  const data = blocks.get(key);
+  if (!data) return;
+
+  if (!undoBlocked) {
+    undoStack.push({
+      type: 'remove', cell: { ...cell },
+      saved: { type: data.type, color: data.color, texture: data.texture }
+    });
+    if (undoStack.length > MAX_UNDO) undoStack.shift();
+  }
+
+  scene.remove(data.mesh);
+  data.mesh.geometry.dispose();
+  data.mesh.material.dispose();
+  blocks.delete(key);
+  saveToStorage();
+}
+
+function clearAll() {
+  const keys = [...blocks.keys()];
+  for (const key of keys) {
+    const data = blocks.get(key);
+    scene.remove(data.mesh);
+    data.mesh.geometry.dispose();
+    data.mesh.material.dispose();
+    blocks.delete(key);
+  }
+  for (const m of murals) {
+    scene.remove(m.mesh);
+    m.mesh.geometry.dispose();
+    m.mesh.material.dispose();
+  }
+  murals.length = 0;
+  for (const l of labels) {
+    scene.remove(l.sprite);
+    l.sprite.geometry.dispose();
+    l.sprite.material.dispose();
+  }
+  labels.length = 0;
+  if (!_importing) saveToStorage();
+}
+
+// Stats removed — use Chrome devtools if needed
+
+// ======== PLACEMENT HELPERS ========
+
+function getBlockMeshes() {
+  const arr = [];
+  for (const data of blocks.values()) {
+    arr.push(data.mesh);
+  }
+  return arr;
+}
+
+function getSnapFromGround(point) {
+  const x = Math.floor(point.x);
+  const z = Math.floor(point.z);
+  const y = 0;
+  if (x < GRID_MIN || x >= GRID_MAX || z < GRID_MIN || z >= GRID_MAX) return null;
+  return { x, y, z };
+}
+
+function getSnapFromBlockFace(blockData, normal) {
+  const n = { x: Math.round(normal.x), y: Math.round(normal.y), z: Math.round(normal.z) };
+  const cell = {
+    x: blockData.cell.x + n.x,
+    y: blockData.cell.y + n.y,
+    z: blockData.cell.z + n.z,
+  };
+  if (cell.x < GRID_MIN || cell.x >= GRID_MAX ||
+      cell.z < GRID_MIN || cell.z >= GRID_MAX ||
+      cell.y < HEIGHT_MIN || cell.y >= HEIGHT_MAX) return null;
+  return cell;
+}
+
+function findLabelAtScreen(clientX, clientY) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  let best = null, bestDist = 30;
+  for (const l of labels) {
+    const v = l.sprite.position.clone().project(camera);
+    const sx = (v.x * 0.5 + 0.5) * rect.width;
+    const sy = (-v.y * 0.5 + 0.5) * rect.height;
+    const d = Math.hypot(clientX - rect.left - sx, clientY - rect.top - sy);
+    if (d < bestDist) { bestDist = d; best = l; }
+  }
+  return best;
+}
+
+// ======== POINTER / INTERACTION ========
+
+let mouseDownPos = { x: 0, y: 0 };
+let isPointerDown = false;
+
+function getIntersection(clientX, clientY) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+  raycaster.setFromCamera(pointer, camera);
+
+  const meshes = getBlockMeshes();
+  const muralMeshes = murals.map(m => m.mesh);
+  const targets = [...meshes, ...muralMeshes, groundMesh];
+  const intersects = raycaster.intersectObjects(targets);
+  if (intersects.length === 0) return null;
+
+  const hit = intersects[0];
+  const obj = hit.object;
+
+  if (obj === groundMesh) {
+    const cell = getSnapFromGround(hit.point);
+    return cell ? { type: 'ground', cell } : null;
+  }
+
+  // Check if hit a mural
+  const mural = murals.find(m => m.mesh === obj);
+  if (mural) return { type: 'mural', mural };
+
+  const blockData = obj.userData.blockData;
+  if (!blockData) return null;
+
+  const normal = hit.face.normal.clone();
+  normal.transformDirection(obj.matrixWorld);
+  const cell = getSnapFromBlockFace(blockData, normal);
+  if (!cell) return { type: 'block', blockData, normal, cell: null };
+  return { type: 'block', blockData, normal, cell };
+}
+
+function placeBlockAt(clientX, clientY) {
+  const result = getIntersection(clientX, clientY);
+  if (!result) return;
+
+  let cell;
+  if (result.type === 'ground') {
+    cell = result.cell;
+  } else {
+    cell = result.cell;
+  }
+  if (!cell) return;
+  if (isOccupied(cell)) return;
+
+  createBlock(cell, selectedType, customColor, customTexture);
+}
+
+function removeBlockAt(clientX, clientY) {
+  const result = getIntersection(clientX, clientY);
+  if (!result || result.type === 'ground') return;
+  const cell = result.blockData.cell;
+  removeBlock(cell);
+}
+
+function repaintBlockAt(clientX, clientY) {
+  const result = getIntersection(clientX, clientY);
+  if (!result || result.type === 'ground') return;
+  const data = result.blockData;
+  const oldType = data.type;
+  const oldColor = data.color;
+  const oldTexture = data.texture;
+  const paintType = customTexture
+  ? {
+      id: 'image',
+      label: 'Image',
+      color: '#ffffff',
+      roughness: 0.7,
+      metalness: 0
+    }
+  : selectedType;
+
+  const mat = makeMaterial(paintType, customColor, customTexture);
+  data.mesh.material.dispose();
+  data.mesh.material = mat;
+  data.type = paintType;
+  data.color = customColor;
+  data.texture = customTexture;
+
+  undoStack.push({
+    type: 'repaint', cell: { ...data.cell },
+    oldType, oldColor, oldTexture,
+    newType: selectedType, newColor: customColor, newTexture: customTexture,
+  });
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  saveToStorage();
+}
+
+// ======== SELECTION ========
+
+function toggleSelectMode() {
+  isSelectMode = !isSelectMode;
+  const btn = document.getElementById('selectBtn');
+  btn.textContent = 'Select: ' + (isSelectMode ? 'On' : 'Off');
+  btn.className = isSelectMode ? 'btn btn-primary' : 'btn btn-secondary';
+  const help = document.getElementById('help');
+  if (isSelectMode) {
+    help.innerHTML =
+      '<b>LMB</b> — toggle select block<br>' +
+      '<b>Ctrl+C</b> — copy selected<br>' +
+      '<b>Ctrl+X</b> — cut selected<br>' +
+      '<b>Ctrl+V</b> — paste<br>' +
+      '<b>Drag</b> — orbit<br>' +
+      '<b>Scroll</b> — zoom';
+  } else {
+    help.innerHTML =
+      '<b>LMB</b> — place block<br>' +
+      '<b>Shift+LMB</b> — repaint block<br>' +
+      '<b>RMB</b> — remove block<br>' +
+      '<b>Drag</b> — orbit<br>' +
+      '<b>Scroll</b> — zoom';
+  }
+  if (!isSelectMode) clearSelection();
+}
+
+function addSelection(cell) {
+  const key = cellKey(cell);
+  const data = blocks.get(key);
+  if (!data || selection.has(key)) return;
+  const helper = new THREE.BoxHelper(data.mesh, 0xff4444);
+  helper.update();
+  scene.add(helper);
+  selection.set(key, helper);
+}
+
+function removeSelection(cell) {
+  const key = cellKey(cell);
+  const helper = selection.get(key);
+  if (!helper) return;
+  scene.remove(helper);
+  helper.dispose();
+  selection.delete(key);
+}
+
+function toggleSelection(cell) {
+  const key = cellKey(cell);
+  if (selection.has(key)) removeSelection(cell);
+  else addSelection(cell);
+}
+
+function clearSelection() {
+  for (const [key, helper] of selection) {
+    scene.remove(helper);
+    helper.dispose();
+  }
+  selection.clear();
+}
+
+function notify(msg) {
+  const el = document.createElement('div');
+  el.textContent = msg;
+  Object.assign(el.style, {
+    position: 'fixed', top: '16px', left: '50%', transform: 'translateX(-50%)',
+    background: '#e94560', color: '#fff', padding: '8px 20px', borderRadius: '6px',
+    fontSize: '14px', zIndex: '200', pointerEvents: 'none',
+    transition: 'opacity 0.3s', fontFamily: 'system-ui, sans-serif',
+  });
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 800);
+}
+
+function copySelection() {
+  clipBuffer.length = 0;
+  if (selection.size === 0) { notify('No blocks selected'); return; }
+  // Use the first selected block as origin
+  let origin = null;
+  for (const key of selection.keys()) {
+    const [x, y, z] = key.split(',').map(Number);
+    if (!origin) origin = { x, y, z };
+  }
+  for (const [key, helper] of selection) {
+    const [x, y, z] = key.split(',').map(Number);
+    const data = blocks.get(key);
+    if (!data) continue;
+    clipBuffer.push({
+      cell: { x: x - origin.x, y: y - origin.y, z: z - origin.z },
+      type: data.type,
+      color: data.color,
+      texture: data.texture,
+    });
+  }
+  notify('Copied ' + clipBuffer.length + ' block' + (clipBuffer.length > 1 ? 's' : ''));
+  buildPasteGhost();
+}
+
+function cutSelection() {
+  copySelection();
+  // Collect keys to remove
+  const keys = [...selection.keys()];
+  undoBlocked = true;
+  for (const key of keys) {
+    const [x, y, z] = key.split(',').map(Number);
+    removeBlock({ x, y, z });
+  }
+  undoBlocked = false;
+  clearSelection();
+  notify('Cut ' + keys.length + ' block' + (keys.length > 1 ? 's' : ''));
+}
+
+function pasteClipboard() {
+  if (clipBuffer.length === 0) { notify('Nothing to paste'); return; }
+  // Find min/max to compute bounds for auto-offset
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity;
+  for (const b of clipBuffer) {
+    if (b.cell.x < minX) minX = b.cell.x;
+    if (b.cell.x > maxX) maxX = b.cell.x;
+    if (b.cell.z < minZ) minZ = b.cell.z;
+  }
+  const width = maxX - minX + 2; // +2 for margin
+
+  // Auto-offset X to avoid overlap
+  let offsetX = width;
+  // Check existing blocks to find a clear spot
+  for (let attempt = 0; attempt < 20; attempt++) {
+    let clear = true;
+    for (const b of clipBuffer) {
+      const checkKey = cellKey({ x: b.cell.x + offsetX, y: b.cell.y, z: b.cell.z });
+      if (blocks.has(checkKey)) { clear = false; offsetX += width; break; }
+    }
+    if (clear) break;
+  }
+
+  undoBlocked = true;
+  for (const b of clipBuffer) {
+    createBlock(
+      { x: b.cell.x + offsetX, y: b.cell.y, z: b.cell.z },
+      b.type, b.color, b.texture
+    );
+  }
+  undoBlocked = false;
+  clearPasteGhost();
+  notify('Pasted ' + clipBuffer.length + ' block' + (clipBuffer.length > 1 ? 's' : ''));
+}
+
+function pasteAtPosition(cell) {
+  if (clipBuffer.length === 0) return;
+  undoBlocked = true;
+  for (const b of clipBuffer) {
+    createBlock(
+      { x: cell.x + b.cell.x, y: cell.y + b.cell.y, z: cell.z + b.cell.z },
+      b.type, b.color, b.texture
+    );
+  }
+  undoBlocked = false;
+  clearPasteGhost();
+  notify('Pasted ' + clipBuffer.length + ' block' + (clipBuffer.length > 1 ? 's' : ''));
+}
+
+function clearPasteGhost() {
+  if (pasteGhostGroup) {
+    scene.remove(pasteGhostGroup);
+    pasteGhostGroup.traverse(child => {
+      if (child.isMesh) { child.geometry.dispose(); child.material.dispose(); }
+    });
+    pasteGhostGroup = null;
+  }
+  pasteGhostCell = null;
+}
+
+function buildPasteGhost() {
+  clearPasteGhost();
+  if (clipBuffer.length === 0) return;
+  const group = new THREE.Group();
+  for (const b of clipBuffer) {
+    const def = BLOCK_TYPES.find(t => t.id === b.type.id) || BLOCK_TYPES[0];
+    const mat = new THREE.MeshStandardMaterial({
+      color: b.color || def.color,
+      transparent: true,
+      opacity: 0.3,
+      roughness: 0.5,
+      metalness: 0,
+      depthWrite: false,
+    });
+    const geo = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(b.cell.x, b.cell.y, b.cell.z);
+    // wireframe edge
+    const edgeGeo = new THREE.EdgesGeometry(geo);
+    const edgeMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
+    const edge = new THREE.LineSegments(edgeGeo, edgeMat);
+    edge.position.copy(mesh.position);
+    group.add(mesh);
+    group.add(edge);
+  }
+  group.visible = false;
+  scene.add(group);
+  pasteGhostGroup = group;
+}
+
+function toggleMuralMode() {
+  if (isMuralMode) {
+    isMuralMode = false;
+    muralCorner1 = null;
+    clearMuralPreview();
+    muralBtn.textContent = 'Mural';
+    muralBtn.className = 'btn btn-secondary';
+  } else {
+    if (isLabelMode) {
+      isLabelMode = false;
+      labelCorner1 = null;
+      labelBtn.textContent = 'Label';
+      labelBtn.className = 'btn btn-secondary';
+    }
+    isMuralMode = true;
+    muralCorner1 = null;
+    muralBtn.textContent = 'Mural: ON';
+    muralBtn.className = 'btn btn-primary';
+    notify('Click a block face for the mural corner');
+  }
+}
+
+function updateGhost(clientX, clientY) {
+  if (pasteGhostGroup) {
+    if (ghostMesh) ghostMesh.visible = false;
+    const result = getIntersection(clientX, clientY);
+    if (!result || !result.cell) {
+      pasteGhostGroup.visible = false;
+      return;
+    }
+    const cell = result.cell;
+    let blocked = false;
+    for (const b of clipBuffer) {
+      const ck = cellKey({ x: cell.x + b.cell.x, y: cell.y + b.cell.y, z: cell.z + b.cell.z });
+      if (blocks.has(ck)) { blocked = true; break; }
+    }
+    if (blocked) {
+      pasteGhostGroup.visible = false;
+      return;
+    }
+    pasteGhostGroup.position.set(cell.x + 0.5, cell.y + 0.5, cell.z + 0.5);
+    pasteGhostGroup.visible = true;
+    pasteGhostCell = cell;
+    return;
+  }
+
+  if (!ghostMesh) {
+    const geo = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.25,
+      depthWrite: false,
+    });
+    ghostMesh = new THREE.Mesh(geo, mat);
+    ghostMesh.renderOrder = 999;
+    scene.add(ghostMesh);
+  }
+
+  const result = getIntersection(clientX, clientY);
+  if (!result || (result.type === 'block' && !result.cell)) {
+    ghostMesh.visible = false;
+    return;
+  }
+
+  let cell;
+  if (result.type === 'ground') {
+    cell = result.cell;
+  } else {
+    cell = result.cell;
+  }
+
+  if (!cell || isOccupied(cell)) {
+    ghostMesh.visible = false;
+    return;
+  }
+
+  ghostMesh.position.set(cell.x + 0.5, cell.y + 0.5, cell.z + 0.5);
+  ghostMesh.visible = true;
+}
+
+// ======== MURAL ========
+
+function clearMuralPreview() {
+  if (muralPreview) {
+    scene.remove(muralPreview);
+    muralPreview.geometry.dispose();
+    muralPreview.material.dispose();
+    muralPreview = null;
+  }
+}
+
+function updateMuralPreview(cell2) {
+  clearMuralPreview();
+  if (!muralCorner1 || !customTexture) return;
+  const c1 = muralCorner1.cell;
+  const normal = muralCorner1.normal;
+  const orig = muralCorner1.blockData.cell;
+  const minX = Math.min(c1.x, cell2.x);
+  const maxX = Math.max(c1.x, cell2.x);
+  const minY = Math.min(c1.y, cell2.y);
+  const maxY = Math.max(c1.y, cell2.y);
+  const minZ = Math.min(c1.z, cell2.z);
+  const maxZ = Math.max(c1.z, cell2.z);
+
+  let w, h, cx, cy, cz, rot;
+  if (normal.x !== 0) {
+    w = maxZ - minZ + 1;
+    h = maxY - minY + 1;
+    cx = orig.x + (normal.x > 0 ? 1 : 0) + normal.x * 0.005;
+    cy = (minY + maxY) / 2 + 0.5;
+    cz = (minZ + maxZ) / 2 + 0.5;
+    rot = { x: 0, y: normal.x > 0 ? Math.PI / 2 : -Math.PI / 2, z: 0 };
+  } else if (normal.z !== 0) {
+    w = maxX - minX + 1;
+    h = maxY - minY + 1;
+    cx = (minX + maxX) / 2 + 0.5;
+    cy = (minY + maxY) / 2 + 0.5;
+    cz = orig.z + (normal.z > 0 ? 1 : 0) + normal.z * 0.005;
+    rot = { x: 0, y: normal.z > 0 ? 0 : Math.PI, z: 0 };
+  } else {
+    w = maxX - minX + 1;
+    h = maxZ - minZ + 1;
+    cx = (minX + maxX) / 2 + 0.5;
+    cy = orig.y + (normal.y > 0 ? 1 : 0) + normal.y * 0.005;
+    cz = (minZ + maxZ) / 2 + 0.5;
+    rot = { x: -Math.PI / 2, y: 0, z: 0 };
+  }
+
+  const geo = new THREE.PlaneGeometry(w, h);
+  const mat = new THREE.MeshStandardMaterial({
+    map: customTexture,
+    transparent: true,
+    opacity: 0.5,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  muralPreview = new THREE.Mesh(geo, mat);
+  muralPreview.position.set(cx, cy, cz);
+  muralPreview.rotation.set(rot.x, rot.y, rot.z);
+  muralPreview.renderOrder = 998;
+  scene.add(muralPreview);
+}
+
+function buildMuralMesh(c1, cell2, normal, orig, texture) {
+  const minX = Math.min(c1.x, cell2.x);
+  const maxX = Math.max(c1.x, cell2.x);
+  const minY = Math.min(c1.y, cell2.y);
+  const maxY = Math.max(c1.y, cell2.y);
+  const minZ = Math.min(c1.z, cell2.z);
+  const maxZ = Math.max(c1.z, cell2.z);
+
+  let w, h, cx, cy, cz, rot;
+  if (normal.x !== 0) {
+    w = maxZ - minZ + 1; h = maxY - minY + 1;
+    cx = orig.x + (normal.x > 0 ? 1 : 0) + normal.x * 0.005;
+    cy = (minY + maxY) / 2 + 0.5;
+    cz = (minZ + maxZ) / 2 + 0.5;
+    rot = { x: 0, y: normal.x > 0 ? Math.PI / 2 : -Math.PI / 2, z: 0 };
+  } else if (normal.z !== 0) {
+    w = maxX - minX + 1; h = maxY - minY + 1;
+    cx = (minX + maxX) / 2 + 0.5;
+    cy = (minY + maxY) / 2 + 0.5;
+    cz = orig.z + (normal.z > 0 ? 1 : 0) + normal.z * 0.005;
+    rot = { x: 0, y: normal.z > 0 ? 0 : Math.PI, z: 0 };
+  } else {
+    w = maxX - minX + 1; h = maxZ - minZ + 1;
+    cx = (minX + maxX) / 2 + 0.5;
+    cy = orig.y + (normal.y > 0 ? 1 : 0) + normal.y * 0.005;
+    cz = (minZ + maxZ) / 2 + 0.5;
+    rot = { x: -Math.PI / 2, y: 0, z: 0 };
+  }
+
+  const geo = new THREE.PlaneGeometry(w, h);
+  const mat = new THREE.MeshStandardMaterial({
+    map: texture,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(cx, cy, cz);
+  mesh.rotation.set(rot.x, rot.y, rot.z);
+  return mesh;
+}
+
+function createMural(cell2) {
+  if (!muralCorner1 || !customTexture) {
+    notify('Upload an image first, then click two blocks for mural corners');
+    return;
+  }
+  const c1 = muralCorner1.cell;
+  const normal = muralCorner1.normal;
+
+  const minX = Math.min(c1.x, cell2.x);
+  const maxX = Math.max(c1.x, cell2.x);
+  const minY = Math.min(c1.y, cell2.y);
+  const maxY = Math.max(c1.y, cell2.y);
+  const minZ = Math.min(c1.z, cell2.z);
+  const maxZ = Math.max(c1.z, cell2.z);
+
+  const orig = muralCorner1.blockData.cell;
+  let w, h, cx, cy, cz, rot;
+  if (normal.x !== 0) {
+    w = maxZ - minZ + 1; h = maxY - minY + 1;
+    cx = orig.x + (normal.x > 0 ? 1 : 0) + normal.x * 0.005;
+    cy = (minY + maxY) / 2 + 0.5;
+    cz = (minZ + maxZ) / 2 + 0.5;
+    rot = { x: 0, y: normal.x > 0 ? Math.PI / 2 : -Math.PI / 2, z: 0 };
+  } else if (normal.z !== 0) {
+    w = maxX - minX + 1; h = maxY - minY + 1;
+    cx = (minX + maxX) / 2 + 0.5;
+    cy = (minY + maxY) / 2 + 0.5;
+    cz = orig.z + (normal.z > 0 ? 1 : 0) + normal.z * 0.005;
+    rot = { x: 0, y: normal.z > 0 ? 0 : Math.PI, z: 0 };
+  } else {
+    w = maxX - minX + 1; h = maxZ - minZ + 1;
+    cx = (minX + maxX) / 2 + 0.5;
+    cy = orig.y + (normal.y > 0 ? 1 : 0) + normal.y * 0.005;
+    cz = (minZ + maxZ) / 2 + 0.5;
+    rot = { x: -Math.PI / 2, y: 0, z: 0 };
+  }
+
+  const geo = new THREE.PlaneGeometry(w, h);
+  const mat = new THREE.MeshStandardMaterial({
+    map: customTexture,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(cx, cy, cz);
+  mesh.rotation.set(rot.x, rot.y, rot.z);
+  scene.add(mesh);
+
+  murals.push({ mesh, cell1: { ...c1 }, cell2: { ...cell2 }, cellOrig: { ...orig }, normal: { ...normal }, textureSrc: customTexture.image.src });
+  clearMuralPreview();
+  muralCorner1 = null;
+  isMuralMode = false;
+  saveToStorage();
+  muralBtn.textContent = 'Mural';
+  muralBtn.className = 'btn btn-secondary';
+}
+
+function createLabel(cell2) {
+  if (!labelCorner1) return;
+  const c1 = labelCorner1.cell;
+  const normal = labelCorner1.normal;
+  const orig = labelCorner1.blockData.cell;
+
+  const minX = Math.min(c1.x, cell2.x);
+  const maxX = Math.max(c1.x, cell2.x);
+  const minY = Math.min(c1.y, cell2.y);
+  const maxY = Math.max(c1.y, cell2.y);
+  const minZ = Math.min(c1.z, cell2.z);
+  const maxZ = Math.max(c1.z, cell2.z);
+
+  const text = prompt('Enter label text:');
+  if (!text) { labelCorner1 = null; isLabelMode = false; labelBtn.textContent = 'Label'; labelBtn.className = 'btn btn-secondary'; return; }
+
+  let w, h, cx, cy, cz, rot;
+  if (normal.x !== 0) {
+    w = maxZ - minZ + 1; h = maxY - minY + 1;
+    cx = orig.x + (normal.x > 0 ? 1 : 0) + normal.x * 0.005;
+    cy = (minY + maxY) / 2 + 0.5;
+    cz = (minZ + maxZ) / 2 + 0.5;
+    rot = { x: 0, y: normal.x > 0 ? Math.PI / 2 : -Math.PI / 2, z: 0 };
+  } else if (normal.z !== 0) {
+    w = maxX - minX + 1; h = maxY - minY + 1;
+    cx = (minX + maxX) / 2 + 0.5;
+    cy = (minY + maxY) / 2 + 0.5;
+    cz = orig.z + (normal.z > 0 ? 1 : 0) + normal.z * 0.005;
+    rot = { x: 0, y: normal.z > 0 ? 0 : Math.PI, z: 0 };
+  } else {
+    w = maxX - minX + 1; h = maxZ - minZ + 1;
+    cx = (minX + maxX) / 2 + 0.5;
+    cy = orig.y + (normal.y > 0 ? 1 : 0) + normal.y * 0.005;
+    cz = (minZ + maxZ) / 2 + 0.5;
+    rot = { x: -Math.PI / 2, y: 0, z: 0 };
+  }
+
+  const canvasW = Math.max(256, w * 512);
+  const canvasH = Math.max(128, h * 512);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvasW;
+  canvas.height = canvasH;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#000';
+  let fontSize = canvas.width * 0.6;
+  do {
+    ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+    if (ctx.measureText(text).width < canvas.width * 0.9) break;
+    fontSize *= 0.9;
+  } while (fontSize > 12);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+
+  const geo = new THREE.PlaneGeometry(w * 0.9, h * 0.9);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, transparent: true, depthTest: true });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(cx, cy, cz);
+  mesh.position.add(normal.clone().multiplyScalar(0.05));
+  mesh.rotation.set(rot.x, rot.y, rot.z);
+  mesh.renderOrder = 999;
+  scene.add(mesh);
+
+  labels.push({ sprite: mesh, cell1: { ...c1 }, cell2: { ...cell2 }, cellOrig: { ...orig }, normal: { ...normal }, text, w, h });
+  labelCorner1 = null;
+  isLabelMode = false;
+  labelBtn.textContent = 'Label';
+  saveToStorage();
+  labelBtn.className = 'btn btn-secondary';
+  notify('Label created');
+}
+
+function rebuildLabel(l) {
+  const normal = new THREE.Vector3(l.normal.x, l.normal.y, l.normal.z);
+  const c1 = l.cell1;
+  const cell2 = l.cell2;
+  const orig = l.cellOrig;
+
+  const minX = Math.min(c1.x, cell2.x);
+  const maxX = Math.max(c1.x, cell2.x);
+  const minY = Math.min(c1.y, cell2.y);
+  const maxY = Math.max(c1.y, cell2.y);
+  const minZ = Math.min(c1.z, cell2.z);
+  const maxZ = Math.max(c1.z, cell2.z);
+
+  let w, h, cx, cy, cz, rot;
+  if (normal.x !== 0) {
+    w = maxZ - minZ + 1; h = maxY - minY + 1;
+    cx = orig.x + (normal.x > 0 ? 1 : 0) + normal.x * 0.005;
+    cy = (minY + maxY) / 2 + 0.5;
+    cz = (minZ + maxZ) / 2 + 0.5;
+    rot = { x: 0, y: normal.x > 0 ? Math.PI / 2 : -Math.PI / 2, z: 0 };
+  } else if (normal.z !== 0) {
+    w = maxX - minX + 1; h = maxY - minY + 1;
+    cx = (minX + maxX) / 2 + 0.5;
+    cy = (minY + maxY) / 2 + 0.5;
+    cz = orig.z + (normal.z > 0 ? 1 : 0) + normal.z * 0.005;
+    rot = { x: 0, y: normal.z > 0 ? 0 : Math.PI, z: 0 };
+  } else {
+    w = maxX - minX + 1; h = maxZ - minZ + 1;
+    cx = (minX + maxX) / 2 + 0.5;
+    cy = orig.y + (normal.y > 0 ? 1 : 0) + normal.y * 0.005;
+    cz = (minZ + maxZ) / 2 + 0.5;
+    rot = { x: -Math.PI / 2, y: 0, z: 0 };
+  }
+
+  const canvasW = Math.max(256, w * 512);
+  const canvasH = Math.max(128, h * 512);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvasW;
+  canvas.height = canvasH;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#000';
+  let fontSize = canvas.width * 0.6;
+  do {
+    ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+    if (ctx.measureText(l.text).width < canvas.width * 0.9) break;
+    fontSize *= 0.9;
+  } while (fontSize > 12);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(l.text, canvas.width / 2, canvas.height / 2);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+
+  const geo = new THREE.PlaneGeometry(w * 0.9, h * 0.9);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, transparent: true, depthTest: true });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(cx, cy, cz);
+  mesh.position.add(normal.clone().multiplyScalar(0.05));
+  mesh.rotation.set(rot.x, rot.y, rot.z);
+  mesh.renderOrder = 999;
+  scene.add(mesh);
+  labels.push(l);
+  l.sprite = mesh;
+}
+
+function setupEvents() {
+  const canvas = renderer.domElement;
+
+  canvas.addEventListener('pointerdown', (e) => {
+    mouseDownPos.x = e.clientX;
+    mouseDownPos.y = e.clientY;
+    isPointerDown = true;
+  });
+
+  canvas.addEventListener('pointerup', (e) => {
+    if (!isPointerDown) return;
+    isPointerDown = false;
+    const dx = e.clientX - mouseDownPos.x;
+    const dy = e.clientY - mouseDownPos.y;
+    if (Math.sqrt(dx*dx + dy*dy) > 5) return;
+
+    if (e.button === 0) {
+      if (isLabelMode) {
+        const result = getIntersection(e.clientX, e.clientY);
+        if (result && result.type === 'block' && result.cell) {
+          if (!labelCorner1) {
+            labelCorner1 = { cell: { ...result.cell }, normal: result.normal, blockData: result.blockData };
+            notify('Label: click a second block on the same face');
+          } else {
+            createLabel(result.cell);
+          }
+        }
+        return;
+      }
+      if (isMuralMode) {
+        const result = getIntersection(e.clientX, e.clientY);
+        if (result && result.type === 'block' && result.cell) {
+          if (!muralCorner1) {
+            muralCorner1 = { cell: { ...result.cell }, normal: { ...result.normal }, blockData: result.blockData };
+            notify('Mural: click a second block on the same face');
+          } else {
+            createMural(result.cell);
+          }
+        }
+        return;
+      }
+      if (e.ctrlKey || e.metaKey) {
+        const result = getIntersection(e.clientX, e.clientY);
+        if (result && result.type === 'block') {
+          toggleSelection(result.blockData.cell);
+        } else if (result && result.type === 'ground' && clipBuffer.length > 0) {
+          pasteAtPosition(result.cell);
+          clearPasteGhost();
+        } else {
+          placeBlockAt(e.clientX, e.clientY);
+        }
+      } else if (pasteGhostGroup && pasteGhostCell) {
+        pasteAtPosition(pasteGhostCell);
+        clearPasteGhost();
+      } else if (isSelectMode) {
+        placeBlockAt(e.clientX, e.clientY);
+      } else if (e.shiftKey) {
+        repaintBlockAt(e.clientX, e.clientY);
+      } else {
+        const result = getIntersection(e.clientX, e.clientY);
+        if (result && result.type === 'mural') {
+          const idx = murals.indexOf(result.mural);
+          if (idx !== -1) {
+            scene.remove(result.mural.mesh);
+            result.mural.mesh.geometry.dispose();
+            result.mural.mesh.material.dispose();
+            murals.splice(idx, 1);
+            notify('Mural removed');
+          }
+        } else {
+          placeBlockAt(e.clientX, e.clientY);
+        }
+      }
+    } else if (e.button === 2) {
+      // Check labels first (distance-based, no raycaster overhead)
+      const hitLabel = findLabelAtScreen(e.clientX, e.clientY);
+      if (hitLabel) {
+        scene.remove(hitLabel.sprite);
+        hitLabel.sprite.geometry.dispose();
+        hitLabel.sprite.material.dispose();
+        const idx = labels.indexOf(hitLabel);
+        if (idx !== -1) labels.splice(idx, 1);
+        notify('Label removed');
+        return;
+      }
+      const result = getIntersection(e.clientX, e.clientY);
+      if (!result) return;
+      if (result.type === 'mural') {
+        scene.remove(result.mural.mesh);
+        result.mural.mesh.geometry.dispose();
+        result.mural.mesh.material.dispose();
+        const idx = murals.indexOf(result.mural);
+        if (idx !== -1) murals.splice(idx, 1);
+        notify('Mural removed');
+      } else if (result.type === 'block') {
+        const cell = result.blockData.cell;
+        if (cell) removeBlock(cell);
+      }
+    }
+  });
+
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  const texTooltip = document.createElement('div');
+  texTooltip.id = 'texTooltip';
+  Object.assign(texTooltip.style, {
+    position: 'fixed', pointerEvents: 'none', display: 'none',
+    background: 'rgba(0,0,0,0.8)', color: '#fff', padding: '4px 10px',
+    borderRadius: '4px', fontSize: '12px', zIndex: '300',
+    fontFamily: 'system-ui, sans-serif', whiteSpace: 'nowrap',
+  });
+  document.body.appendChild(texTooltip);
+
+  canvas.addEventListener('pointermove', (e) => {
+    if (isMuralMode && muralCorner1) {
+      const result = getIntersection(e.clientX, e.clientY);
+      if (result && result.type === 'block' && result.cell) {
+        updateMuralPreview(result.cell);
+      } else {
+        clearMuralPreview();
+      }
+    } else {
+      updateGhost(e.clientX, e.clientY);
+    }
+
+    const hit = getIntersection(e.clientX, e.clientY);
+    if (hit && hit.type === 'block' && hit.blockData) {
+      const data = hit.blockData;
+      if (data && data.texture) {
+        const entry = dirImages.find(di => di.texture.image.src === data.texture.image.src);
+        if (entry) {
+          texTooltip.textContent = entry.name;
+        } else {
+          texTooltip.textContent = data.type.label || 'Custom texture';
+        }
+      } else {
+        texTooltip.textContent = data.type.label;
+      }
+      texTooltip.style.left = (e.clientX + 12) + 'px';
+      texTooltip.style.top = (e.clientY + 12) + 'px';
+      texTooltip.style.display = '';
+    } else {
+      texTooltip.style.display = 'none';
+    }
+  });
+
+  canvas.addEventListener('pointerleave', () => {
+    if (ghostMesh) ghostMesh.visible = false;
+  });
+}
+
+// ======== PALETTE UI ========
+
+function buildPalette() {
+  paletteEl.innerHTML = '';
+  BLOCK_TYPES.forEach((type, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'palette-btn';
+    if (type.id === selectedType.id && !textureActive) btn.classList.add('active');
+    if (type.texUrl) {
+      btn.style.backgroundImage = `url(${type.texUrl})`;
+      btn.style.backgroundSize = 'cover';
+    } else {
+      btn.style.background = type.color;
+    }
+    btn.dataset.id = type.id;
+    btn.innerHTML = `<span class="label">${type.label}</span>`;
+    btn.addEventListener('click', () => selectType(type.id));
+    paletteEl.appendChild(btn);
+  });
+  updateTexturePaletteEntry();
+}
+
+function updateTexturePaletteEntry() {
+  // Find or create textured entries
+  const existing = paletteEl.querySelectorAll('.palette-btn-textured');
+  for (const el of existing) el.remove();
+
+  if (customTexture) {
+    const btn = document.createElement('button');
+    btn.className = 'palette-btn palette-btn-textured';
+    const thumb = document.createElement('img');
+    thumb.className = 'tex-thumb';
+    thumb.src = customTexture.image.src;
+    btn.appendChild(thumb);
+    btn.title = 'Custom texture';
+    btn.addEventListener('click', () => {
+      paletteEl.querySelectorAll('.palette-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      textureActive = true;
+      selectedType = { id: 'custom', label: 'Texture', color: customColor, roughness: 0.7, metalness: 0 };
+      texClearBtn.style.display = '';
+    });
+    paletteEl.insertBefore(btn, paletteEl.children[0]);
+  }
+}
+
+function selectType(id) {
+  texClearBtn.style.display = 'none';
+  textureActive = false;
+  customTexture = null;
+  const type = BLOCK_TYPES.find(t => t.id === id);
+  if (!type) return;
+  selectedType = type;
+  customColor = type.color;
+  colorPicker.value = type.color;
+
+  paletteEl.querySelectorAll('.palette-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.id === id);
+  });
+  updateTexturePaletteEntry();
+}
+
+function renderDirImagePalette() {
+  const dirPalette = document.getElementById('dirPalette');
+  const section = document.getElementById('dirPaletteSection');
+  dirPalette.innerHTML = '';
+  if (dirImages.length === 0) { section.style.display = 'none'; return; }
+  section.style.display = '';
+  for (const di of dirImages) {
+    const btn = document.createElement('button');
+    btn.className = 'palette-btn palette-btn-dir';
+    const thumb = document.createElement('img');
+    thumb.className = 'tex-thumb';
+    thumb.src = di.texture.image.src;
+    btn.appendChild(thumb);
+    btn.title = di.name;
+    btn.addEventListener('click', () => {
+      paletteEl.querySelectorAll('.palette-btn').forEach(b => b.classList.remove('active'));
+      dirPalette.querySelectorAll('.palette-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      customTexture = di.texture;
+      textureActive = true;
+      selectedType = { id: 'custom', label: di.name, color: '#ffffff', roughness: 0.7, metalness: 0 };
+      texClearBtn.style.display = '';
+      updateTexturePaletteEntry();
+    });
+    dirPalette.appendChild(btn);
+  }
+}
+
+function imgToDataUrl(img, maxSize) {
+  maxSize = maxSize || 256;
+  const c = document.createElement('canvas');
+  const scale = Math.min(1, maxSize / Math.max(img.naturalWidth, img.naturalHeight));
+  c.width = Math.round(img.naturalWidth * scale);
+  c.height = Math.round(img.naturalHeight * scale);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.7);
+}
+
+function loadDirImagesFromData(images) {
+  dirImages.length = 0;
+  for (const { name, dataUrl } of images) {
+    const img = new Image();
+    img.src = dataUrl;
+    const tex = new THREE.Texture(img);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.needsUpdate = true;
+    dirImages.push({ name, texture: tex });
+  }
+  renderDirImagePalette();
+}
+
+function loadImagesFromFileList(fileList) {
+  const images = [];
+  const files = [];
+  for (let i = 0; i < fileList.length; i++) {
+    const f = fileList[i];
+    if (/\.(png|jpg|jpeg|gif|webp)$/i.test(f.name)) files.push(f);
+  }
+  if (files.length === 0) { notify('No image files found'); return; }
+  let loaded = 0;
+  for (const file of files) {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const dataUrl = imgToDataUrl(img);
+        images.push({ name: file.name, dataUrl });
+        loaded++;
+        if (loaded === files.length) {
+          idbSet('dirImagesData', images);
+          loadDirImagesFromData(images);
+          notify('Loaded ' + images.length + ' images');
+        }
+      };
+      img.onerror = () => {
+        loaded++;
+        if (loaded === files.length) {
+          idbSet('dirImagesData', images);
+          loadDirImagesFromData(images);
+        }
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+function loadImagesFromNames(names) {
+  if (!names || names.length === 0) return;
+  const images = [];
+  let loaded = 0;
+  for (const name of names) {
+    const img = new Image();
+    img.onload = () => {
+      const dataUrl = imgToDataUrl(img);
+      images.push({ name, dataUrl });
+      loaded++;
+      if (loaded === names.length) {
+        idbSet('dirImagesData', images);
+        loadDirImagesFromData(images);
+        notify('Loaded ' + images.length + ' images');
+      }
+    };
+    img.onerror = () => {
+      loaded++;
+      if (loaded === names.length) {
+        idbSet('dirImagesData', images);
+        loadDirImagesFromData(images);
+      }
+    };
+    img.src = './images/' + name;
+  }
+}
+
+function scanDirViaIframe(dirPath, timeoutMs) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => { iframe.remove(); resolve(null); }, timeoutMs || 2000);
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.onload = () => {
+      clearTimeout(timer);
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        const links = doc.querySelectorAll('a');
+        const files = [];
+        for (const link of links) {
+          const href = link.getAttribute('href');
+          if (href && !href.startsWith('?') && !href.startsWith('/') && href !== '../' && href !== '') {
+            let name = decodeURIComponent(href);
+            if (name.startsWith('./')) name = name.slice(2);
+            if (name) files.push(name);
+          }
+        }
+        iframe.remove();
+        resolve(files);
+      } catch (e) {
+        iframe.remove();
+        resolve(null);
+      }
+    };
+    iframe.onerror = () => { clearTimeout(timer); iframe.remove(); resolve(null); };
+    iframe.src = dirPath;
+    document.body.appendChild(iframe);
+  });
+}
+
+async function initImageDir() {
+  // Try IndexedDB cache first (instant, no dialog)
+  const cached = await idbGet('dirImagesData').catch(() => null);
+  if (cached && cached.length > 0) {
+    loadDirImagesFromData(cached);
+    return;
+  }
+
+  // Try scanning ./images/ via iframe
+  const names = await scanDirViaIframe('./images/');
+  if (names && names.length > 0) {
+    const imgNames = names.filter(n => /\.(png|jpg|jpeg|gif|webp)$/i.test(n));
+    if (imgNames.length > 0) {
+      loadImagesFromNames(imgNames);
+      return;
+    }
+  }
+
+  // Fallback: prompt via webkitdirectory on first canvas click
+  const canvas = renderer.domElement;
+  canvas.addEventListener('pointerdown', function firstPick() {
+    canvas.removeEventListener('pointerdown', firstPick);
+    dirInput.click();
+  }, { once: true });
+}
+
+texBtn.addEventListener('click', async () => {
+  // Clear IndexedDB cache first so we always do a fresh scan
+  await idbSet('dirImagesData', []).catch(() => {});
+  notify('Scanning ./images/...');
+  const names = await scanDirViaIframe('./images/', 2000);
+  if (names && names.length > 0) {
+    const imgNames = names.filter(n => /\.(png|jpg|jpeg|gif|webp)$/i.test(n));
+    if (imgNames.length > 0) {
+      loadImagesFromNames(imgNames);
+      return;
+    }
+  }
+  notify('Opening directory picker...');
+  dirInput.click();
+});
+
+dirInput.addEventListener('change', (e) => {
+  if (e.target.files.length > 0) {
+    loadImagesFromFileList(e.target.files);
+    e.target.value = '';
+  }
+});
+
+colorPicker.addEventListener('input', () => {
+  customColor = colorPicker.value;
+  if (!customTexture) {
+    selectedType = { id: 'custom', label: 'Custom', color: customColor, roughness: 0.7, metalness: 0 };
+    paletteEl.querySelectorAll('.palette-btn').forEach(b => b.classList.remove('active'));
+  }
+});
+
+texClearBtn.addEventListener('click', () => {
+  customTexture = null;
+  textureActive = false;
+  texClearBtn.style.display = 'none';
+  selectType(BLOCK_TYPES[0].id);
+});
+
+clearSelBtn?.addEventListener('click', () => clearSelection());
+
+// ======== EXPORT / IMPORT ========
+
+function exportJSON() {
+  const data = {
+    version: 2,
+    blockSize: BLOCK_SIZE,
+    blocks: [],
+    textures: {},
+    murals: [],
+    labels: [],
+  };
+
+  const texMap = new Map();
+
+  for (const [key, block] of blocks) {
+    const b = {
+      cell: [block.cell.x, block.cell.y, block.cell.z],
+      type: block.type.id,
+      color: block.color,
+    };
+    if (block.texture) {
+      const texId = `tex_${block.id}`;
+      b.textureId = texId;
+      if (!texMap.has(block.texture.image.src)) {
+        texMap.set(block.texture.image.src, texId);
+        data.textures[texId] = block.texture.image.src;
+      } else {
+        b.textureId = texMap.get(block.texture.image.src);
+      }
+    }
+    data.blocks.push(b);
+  }
+
+  for (let i = 0; i < murals.length; i++) {
+    const m = murals[i];
+    let texId = texMap.get(m.textureSrc);
+    if (!texId) {
+      texId = `tex_mural_${i}`;
+      texMap.set(m.textureSrc, texId);
+      data.textures[texId] = m.textureSrc;
+    }
+    data.murals.push({
+      cell1: [m.cell1.x, m.cell1.y, m.cell1.z],
+      cell2: [m.cell2.x, m.cell2.y, m.cell2.z],
+      cellOrig: [m.cellOrig.x, m.cellOrig.y, m.cellOrig.z],
+      normal: [m.normal.x, m.normal.y, m.normal.z],
+      textureId: texId,
+    });
+  }
+
+  for (const l of labels) {
+    data.labels.push({
+      cell1: [l.cell1.x, l.cell1.y, l.cell1.z],
+      cell2: [l.cell2.x, l.cell2.y, l.cell2.z],
+      cellOrig: [l.cellOrig.x, l.cellOrig.y, l.cellOrig.z],
+      normal: [l.normal.x, l.normal.y, l.normal.z],
+      text: l.text,
+    });
+  }
+
+  return JSON.stringify(data, null, 2);
+}
+
+function saveToStorage() {
+  try {
+    const json = exportJSON();
+    localStorage.setItem('builder_scene', json);
+  } catch (e) { console.error('saveToStorage failed', e); }
+}
+
+function loadFromStorage() {
+  try {
+    const json = localStorage.getItem('builder_scene');
+    if (json) importJSON(json);
+  } catch (e) { console.error('loadFromStorage failed', e); }
+}
+
+function importJSON(json) {
+  _importing = true;
+  try {
+    const data = JSON.parse(json);
+    if (!data.blocks || !Array.isArray(data.blocks)) throw new Error('Invalid format');
+
+    clearAll();
+
+    // Preload textures from embedded data URLs
+    const texCache = {};
+    if (data.textures) {
+      for (const [id, src] of Object.entries(data.textures)) {
+        const img = new Image();
+        img.src = src;
+        const tex = new THREE.Texture(img);
+        img.onload = () => { tex.needsUpdate = true; };
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+        tex.needsUpdate = true;
+        texCache[id] = tex;
+      }
+    }
+
+    for (const b of data.blocks) {
+      const cell = { x: b.cell[0], y: b.cell[1], z: b.cell[2] };
+      if (isOccupied(cell)) continue;
+
+      let type = BLOCK_TYPES.find(t => t.id === b.type);
+      if (!type) type = BLOCK_TYPES[0];
+      const color = b.color || type.color;
+      const tex = b.textureId ? texCache[b.textureId] : null;
+
+      if (tex) {
+        setTimeout(() => createBlock(cell, type, color, tex), 50);
+      } else {
+        createBlock(cell, type, color, null);
+      }
+    }
+
+    if (Array.isArray(data.murals)) {
+      for (const m of data.murals) {
+        const tex = m.textureId ? texCache[m.textureId] : null;
+        if (!tex) continue;
+        const c1 = { x: m.cell1[0], y: m.cell1[1], z: m.cell1[2] };
+        const cell2 = { x: m.cell2[0], y: m.cell2[1], z: m.cell2[2] };
+        const orig = { x: m.cellOrig[0], y: m.cellOrig[1], z: m.cellOrig[2] };
+        const normal = { x: m.normal[0], y: m.normal[1], z: m.normal[2] };
+        setTimeout(() => {
+          const mesh = buildMuralMesh(c1, cell2, normal, orig, tex);
+          scene.add(mesh);
+          murals.push({ mesh, cell1: { ...c1 }, cell2: { ...cell2 }, cellOrig: { ...orig }, normal: { ...normal }, textureSrc: tex.image.src });
+        }, 50);
+      }
+    }
+
+    if (Array.isArray(data.labels)) {
+      for (const l of data.labels) {
+        if (l.cell1 && l.cell2 && l.cellOrig && l.normal) {
+          setTimeout(() => rebuildLabel({
+            cell1: { x: l.cell1[0], y: l.cell1[1], z: l.cell1[2] },
+            cell2: { x: l.cell2[0], y: l.cell2[1], z: l.cell2[2] },
+            cellOrig: { x: l.cellOrig[0], y: l.cellOrig[1], z: l.cellOrig[2] },
+            normal: { x: l.normal[0], y: l.normal[1], z: l.normal[2] },
+            text: l.text,
+          }), 50);
+        }
+      }
+    }
+  } catch (err) {
+    alert('Import failed: ' + err.message);
+  }
+  // Save after all timeouts complete
+  setTimeout(() => { _importing = false; saveToStorage(); }, 300);
+}
+
+exportBtn.addEventListener('click', async () => {
+  const json = exportJSON();
+
+  // 1) Use stored directory handle (picked once via showDirectoryPicker, saved in IndexedDB)
+  const storedHandle = await idbGet('exportDirHandle').catch(() => null);
+  if (storedHandle) {
+    try {
+      const perm = await storedHandle.requestPermission({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        const fh = await storedHandle.getFileHandle('shop_blocks.json', { create: true });
+        const w = await fh.createWritable();
+        await w.write(json);
+        await w.close();
+        notify('Exported shop_blocks.json');
+        return;
+      }
+    } catch (e) {
+      await idbSet('exportDirHandle', null).catch(() => {});
+    }
+  }
+
+  // 2) showDirectoryPicker —ser picks ./json/ once, handle stored for future exports
+  if (window.showDirectoryPicker) {
+    try {
+      const dirHandle = await window.showDirectoryPicker();
+      const perm = await dirHandle.requestPermission({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        await idbSet('exportDirHandle', dirHandle);
+        const fh = await dirHandle.getFileHandle('shop_blocks.json', { create: true });
+        const w = await fh.createWritable();
+        await w.write(json);
+        await w.close();
+        notify('Exported shop_blocks.json');
+        return;
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') notify('Export failed: ' + e.message);
+      return;
+    }
+  }
+
+  // 3) showSaveFilePicker fallback (remembered via id)
+  if (window.showSaveFilePicker) {
+    try {
+      const fh = await window.showSaveFilePicker({
+        suggestedName: 'shop_blocks.json',
+        id: 'opencode-export',
+        types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
+      });
+      const w = await fh.createWritable();
+      await w.write(json);
+      await w.close();
+      notify('Exported shop_blocks.json');
+      return;
+    } catch (e) {
+      if (e.name !== 'AbortError') notify('Export failed: ' + e.message);
+      return;
+    }
+  }
+
+  // 4) Universal fallback: Blob download + clipboard copy
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'shop_blocks.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  try {
+    await navigator.clipboard.writeText(json);
+    notify('Downloaded shop_blocks.json (copied to clipboard)');
+  } catch {
+    notify('Downloaded shop_blocks.json');
+  }
+});
+
+importBtn.addEventListener('click', () => importInput.click());
+importInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => importJSON(ev.target.result);
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+
+// ======== ANIMATION LOOP ========
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  headlight.position.copy(camera.position);
+  headlight.target.position.copy(controls.target);
+  renderer.render(scene, camera);
+}
+
+// ======== INIT ========
+
+initScene();
+buildPalette();
+setupEvents();
+initImageDir();
+loadFromStorage();
+animate();
+
+// Keyboard shortcuts
+function undo() {
+  const action = undoStack.pop();
+  if (!action) return;
+  undoBlocked = true;
+
+  if (action.type === 'place') {
+    removeBlock(action.cell);
+  } else if (action.type === 'remove') {
+    createBlock(action.cell, action.saved.type, action.saved.color, action.saved.texture);
+  } else if (action.type === 'repaint') {
+    const data = blocks.get(cellKey(action.cell));
+    if (data) {
+      const mat = makeMaterial(action.oldType, action.oldColor, action.oldTexture);
+      data.mesh.material.dispose();
+      data.mesh.material = mat;
+      data.type = action.oldType;
+      data.color = action.oldColor;
+      data.texture = action.oldTexture;
+    }
+  }
+
+  undoBlocked = false;
+}
+
+document.addEventListener('keydown', (e) => {
+  const ctrl = e.ctrlKey || e.metaKey;
+  const key = e.key.toLowerCase();
+
+  if (ctrl && key === 'z') { e.preventDefault(); undo(); return; }
+  if (ctrl && key === 'c') { e.preventDefault(); copySelection(); return; }
+  if (ctrl && key === 'x') { e.preventDefault(); cutSelection(); return; }
+  if (ctrl && key === 'v') { e.preventDefault(); if (pasteGhostCell) { pasteAtPosition(pasteGhostCell); clearPasteGhost(); } else { pasteClipboard(); } return; }
+
+  if (key === 's') { toggleSelectMode(); return; }
+  if (key === 'escape') { clearPasteGhost(); return; }
+  if (key === 'delete' || key === 'backspace') {
+    if (selection.size > 0) cutSelection();
+    else if (blocks.size > 0 && confirm('Clear all blocks?')) clearAll();
+    return;
+  }
+  if (key === 'e') { exportBtn.click(); return; }
+
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault();
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      const step = e.key === 'ArrowUp' ? 1 : -1;
+      zoomSlider.value = Math.max(2, Math.min(50, parseFloat(zoomSlider.value) + step));
+      zoomSlider.dispatchEvent(new Event('input'));
+    } else {
+      const step = e.key === 'ArrowRight' ? -1 : 1;
+      rotSlider.value = (parseFloat(rotSlider.value) + step + 360) % 360;
+      rotSlider.dispatchEvent(new Event('input'));
+    }
+    return;
+  }
+
+  const num = parseInt(key);
+  if (num >= 1 && num <= BLOCK_TYPES.length) {
+    selectType(BLOCK_TYPES[num - 1].id);
+  }
+});
+
+console.log('Block Builder ready!');
+console.log('Shortcuts: 1-9=block, S=select, Ctrl+Z=undo, Ctrl+C=copy&ghost, Ctrl+V=paste at ghost, Esc=cancel ghost, Del=delete, E=export');
+</script>
+</body>
+</html>
